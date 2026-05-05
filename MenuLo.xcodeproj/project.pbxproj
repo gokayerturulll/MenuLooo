@@ -8,9 +8,12 @@
 
 /* Begin PBXBuildFile section */
 		03F20E3CBF3CDEBBCB8D8115 /* User.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29A21F1AA13EBC61A601E02D /* User.swift */; };
+		1842948BBA895FFE63652E32 /* Restaurant.swift in Sources */ = {isa = PBXBuildFile; fileRef = F787FCB9863A5C30F7A9894C /* Restaurant.swift */; };
 		24B79DD9EABED6CA2F5C8454 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDAD36600F62A5D20385BFF7 /* Constants.swift */; };
 		2754FB10EB34845A0D7E7FAB /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E17A7709F6670084B6055CE /* ProfileView.swift */; };
+		28D12F3C96075DEDF9EC9071 /* DiscoverViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E58B3B5940A5DFAF980CCAE4 /* DiscoverViewModel.swift */; };
 		3088FEA833D13BC50F3DB3D9 /* Gabarito-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 5D0DEEFEDAD56880EC0D3737 /* Gabarito-Regular.ttf */; };
+		44E7672A2EA6901491930BA8 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9032294EC81E3DD13D7E301C /* LocationManager.swift */; };
 		62D7AEA114583F9A75EF4870 /* DiscoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72E64D506CE6C90866577A7A /* DiscoverView.swift */; };
 		632B5BB9BA1FFA8270D5CE9A /* Gabarito-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9BDBB45A95DDCABDC36D1708 /* Gabarito-Variable.ttf */; };
 		668EE14FCF8E6A36EA64BA31 /* Gabarito-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C765DE3985CF03AF4A7C467E /* Gabarito-Medium.ttf */; };
@@ -19,13 +22,18 @@
 		7462041586F07E413FB83340 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2B7162AA0AE7D2717381494 /* MainTabView.swift */; };
 		7BDE8AB926E7F422795917E6 /* Gabarito-ExtraBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 12CE10E9F7783A8021B74009 /* Gabarito-ExtraBold.ttf */; };
 		7F00CAC1168A60B5647B3A10 /* Gabarito-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A4432B59218DB2C55E37FD89 /* Gabarito-Bold.ttf */; };
+		80B155DD4D59813854DA873D /* MenuItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = E030563B6F71C68EC643C349 /* MenuItem.swift */; };
 		86BC3A6368A539B50D2E4331 /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = D88BA4940B8785612D9A4769 /* Color+Hex.swift */; };
 		92DBC86A1F12865EB0BEC596 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3BEE8284023D7F870155646D /* Assets.xcassets */; };
 		93ACE5B0E35D71F9529FD377 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 993E37C35FD4CE07DA8B1F1E /* ContentView.swift */; };
 		9AD0418D811331294C0E402D /* MenuBotView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F8AA45476D1800FECB7C24F /* MenuBotView.swift */; };
+		B88BF067057CCC343272F163 /* CameraManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADC4CBEEDE60AF24B40148B3 /* CameraManager.swift */; };
+		BE09EAC52B43003876905284 /* PrimaryButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2661D8FEC36DAE0B2C30E827 /* PrimaryButton.swift */; };
 		BF6E1089393DCDB48AA7BC81 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 367ABD026F449775CBD4AAEF /* AuthViewModel.swift */; };
+		D06CA7B8388DF5C50F9CA747 /* CustomTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20A5E4759750EAB5487FC574 /* CustomTextField.swift */; };
 		E2793E3CF033DCEED88C0401 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 760ED3325077558C4261718E /* Theme.swift */; };
 		E8B52FC3047EA4038B30D793 /* MenuLoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEE4E31C8A65A49E901307C9 /* MenuLoTests.swift */; };
+		EC3D99233DBD76B84F123400 /* RegisterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFCE201272FEF2AE7393146C /* RegisterView.swift */; };
 		ECC31E1D3C1CBB2BFEA3AC81 /* MenuLoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B782671AB614E3CBD9FA5CB /* MenuLoApp.swift */; };
 		FF6EE1948DEF6C50C788DA20 /* Gabarito-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 8DF562885F8A94D43090ED04 /* Gabarito-SemiBold.ttf */; };
 /* End PBXBuildFile section */
@@ -41,9 +49,11 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		06E77F107DAB54CB4DDE332E /* MenuLoTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MenuLoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		06E77F107DAB54CB4DDE332E /* MenuLoTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MenuLoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		12CE10E9F7783A8021B74009 /* Gabarito-ExtraBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Gabarito-ExtraBold.ttf"; sourceTree = "<group>"; };
 		1F8AA45476D1800FECB7C24F /* MenuBotView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBotView.swift; sourceTree = "<group>"; };
+		20A5E4759750EAB5487FC574 /* CustomTextField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomTextField.swift; sourceTree = "<group>"; };
+		2661D8FEC36DAE0B2C30E827 /* PrimaryButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrimaryButton.swift; sourceTree = "<group>"; };
 		29A21F1AA13EBC61A601E02D /* User.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = User.swift; sourceTree = "<group>"; };
 		367ABD026F449775CBD4AAEF /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
 		3BEE8284023D7F870155646D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -53,18 +63,24 @@
 		72E64D506CE6C90866577A7A /* DiscoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverView.swift; sourceTree = "<group>"; };
 		760ED3325077558C4261718E /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		8DF562885F8A94D43090ED04 /* Gabarito-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Gabarito-SemiBold.ttf"; sourceTree = "<group>"; };
+		9032294EC81E3DD13D7E301C /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
 		95F576EF54FDF4E5C49DADCD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		993E37C35FD4CE07DA8B1F1E /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		9B782671AB614E3CBD9FA5CB /* MenuLoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuLoApp.swift; sourceTree = "<group>"; };
 		9BDBB45A95DDCABDC36D1708 /* Gabarito-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Gabarito-Variable.ttf"; sourceTree = "<group>"; };
 		A4432B59218DB2C55E37FD89 /* Gabarito-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Gabarito-Bold.ttf"; sourceTree = "<group>"; };
+		ADC4CBEEDE60AF24B40148B3 /* CameraManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraManager.swift; sourceTree = "<group>"; };
 		B2B7162AA0AE7D2717381494 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		BDAD36600F62A5D20385BFF7 /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
 		C765DE3985CF03AF4A7C467E /* Gabarito-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Gabarito-Medium.ttf"; sourceTree = "<group>"; };
 		D88BA4940B8785612D9A4769 /* Color+Hex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Hex.swift"; sourceTree = "<group>"; };
 		DEE4E31C8A65A49E901307C9 /* MenuLoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuLoTests.swift; sourceTree = "<group>"; };
-		F21829135BFE3F5EF258D2C7 /* MenuLo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MenuLo.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DFCE201272FEF2AE7393146C /* RegisterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegisterView.swift; sourceTree = "<group>"; };
+		E030563B6F71C68EC643C349 /* MenuItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuItem.swift; sourceTree = "<group>"; };
+		E58B3B5940A5DFAF980CCAE4 /* DiscoverViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverViewModel.swift; sourceTree = "<group>"; };
+		F21829135BFE3F5EF258D2C7 /* MenuLo.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = MenuLo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F756BC97F5D14CCB33FF3B88 /* RoomListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomListView.swift; sourceTree = "<group>"; };
+		F787FCB9863A5C30F7A9894C /* Restaurant.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Restaurant.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -88,6 +104,7 @@
 			isa = PBXGroup;
 			children = (
 				51B25291144BA2F7FB03EA4E /* LoginView.swift */,
+				DFCE201272FEF2AE7393146C /* RegisterView.swift */,
 			);
 			path = Auth;
 			sourceTree = "<group>";
@@ -120,6 +137,7 @@
 			isa = PBXGroup;
 			children = (
 				367ABD026F449775CBD4AAEF /* AuthViewModel.swift */,
+				E58B3B5940A5DFAF980CCAE4 /* DiscoverViewModel.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -143,6 +161,8 @@
 		78BF9AC7C65F01EE9E285706 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				E030563B6F71C68EC643C349 /* MenuItem.swift */,
+				F787FCB9863A5C30F7A9894C /* Restaurant.swift */,
 				29A21F1AA13EBC61A601E02D /* User.swift */,
 			);
 			path = Models;
@@ -226,6 +246,8 @@
 		E0AF22CFF11DD945E19F5EF7 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				ADC4CBEEDE60AF24B40148B3 /* CameraManager.swift */,
+				9032294EC81E3DD13D7E301C /* LocationManager.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -233,6 +255,8 @@
 		E54CF287BD6E188C0F830539 /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				20A5E4759750EAB5487FC574 /* CustomTextField.swift */,
+				2661D8FEC36DAE0B2C30E827 /* PrimaryButton.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -304,12 +328,13 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 2640;
+				LastUpgradeCheck = 1500;
 				TargetAttributes = {
 					24C707B2A9E1B725FE564E30 = {
 						DevelopmentTeam = "";
 					};
 					C7DC8D304B285ED1989D77C9 = {
+						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -357,15 +382,23 @@
 			buildActionMask = 2147483647;
 			files = (
 				BF6E1089393DCDB48AA7BC81 /* AuthViewModel.swift in Sources */,
+				B88BF067057CCC343272F163 /* CameraManager.swift in Sources */,
 				86BC3A6368A539B50D2E4331 /* Color+Hex.swift in Sources */,
 				24B79DD9EABED6CA2F5C8454 /* Constants.swift in Sources */,
 				93ACE5B0E35D71F9529FD377 /* ContentView.swift in Sources */,
+				D06CA7B8388DF5C50F9CA747 /* CustomTextField.swift in Sources */,
 				62D7AEA114583F9A75EF4870 /* DiscoverView.swift in Sources */,
+				28D12F3C96075DEDF9EC9071 /* DiscoverViewModel.swift in Sources */,
+				44E7672A2EA6901491930BA8 /* LocationManager.swift in Sources */,
 				6BDE0A19F84FD005A8F8E332 /* LoginView.swift in Sources */,
 				7462041586F07E413FB83340 /* MainTabView.swift in Sources */,
 				9AD0418D811331294C0E402D /* MenuBotView.swift in Sources */,
+				80B155DD4D59813854DA873D /* MenuItem.swift in Sources */,
 				ECC31E1D3C1CBB2BFEA3AC81 /* MenuLoApp.swift in Sources */,
+				BE09EAC52B43003876905284 /* PrimaryButton.swift in Sources */,
 				2754FB10EB34845A0D7E7FAB /* ProfileView.swift in Sources */,
+				EC3D99233DBD76B84F123400 /* RegisterView.swift in Sources */,
+				1842948BBA895FFE63652E32 /* Restaurant.swift in Sources */,
 				6ECCDF46A1BF8995FDB028F1 /* RoomListView.swift in Sources */,
 				E2793E3CF033DCEED88C0401 /* Theme.swift in Sources */,
 				03F20E3CBF3CDEBBCB8D8115 /* User.swift in Sources */,
@@ -431,14 +464,13 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 39K34XJ7HU;
 				INFOPLIST_FILE = MenuLo/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.gokaymenulo.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.menulo.app;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -485,7 +517,6 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -501,7 +532,6 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.menulo.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.9;
@@ -549,7 +579,6 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -572,7 +601,6 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.menulo.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.9;
@@ -585,14 +613,13 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 39K34XJ7HU;
 				INFOPLIST_FILE = MenuLo/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.gokaymenulo.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.menulo.app;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};

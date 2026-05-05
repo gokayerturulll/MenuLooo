@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>MenuLo</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>MenuLo</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>localhost</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+			</dict>
+		</dict>
+	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>MenuLo, QR kodları okumak için kameranıza erişmek istiyor.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>MenuLo, güvenli giriş için Face ID kullanmak istiyor.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>MenuLo, yakınındaki Yeşil Menü fırsatlarını bildirebilmek için konumunuza ihtiyaç duyuyor.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>MenuLo, yakınındaki restoranları gösterebilmek için konumunuza ihtiyaç duyuyor.</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Gabarito-Regular.ttf</string>
+		<string>Gabarito-Medium.ttf</string>
+		<string>Gabarito-SemiBold.ttf</string>
+		<string>Gabarito-Bold.ttf</string>
+		<string>Gabarito-ExtraBold.ttf</string>
+	</array>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string></string>
+		<key>UIImageName</key>
+		<string></string>
+	</dict>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>arm64</string>
+	</array>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+</dict>
+</plist>

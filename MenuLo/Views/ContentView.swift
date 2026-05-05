@@ -22,44 +22,7 @@ struct ContentView: View {
                 .environmentObject(authVM)
         } else {
             // Giriş yapıldıysa Ana Sekmeler gösterilir.
-            TabView(selection: $selectedTab) {
-                
-                // 1. Sekme: Keşfet
-                Text("Keşfet: Liste Arama (Gelecek)")
-                    .tabItem {
-                        Label("Keşfet", systemImage: "magnifyingglass")
-                    }
-                    .tag(0)
-                
-                // 2. Sekme: Harita (Az önce yazdığımız tasarım)
-                DiscoverView()
-                    .tabItem {
-                        Label("Harita", systemImage: "map.fill")
-                    }
-                    .tag(1)
-                
-                // 3. Sekme: QR/Oda
-                Text("QR ve Karar Odası (GroupRoomView) Gelecek")
-                    .tabItem {
-                        Label("QR/Oda", systemImage: "qrcode.viewfinder")
-                    }
-                    .tag(2)
-                
-                // 4. Sekme: MenuBot
-                Text("MenuBot Asistanı Gelecek")
-                    .tabItem {
-                        Label("MenuBot", systemImage: "sparkles")
-                    }
-                    .tag(3)
-                
-                // 5. Sekme: Profil
-                Text("Profil Görünümü (ProfileView) Gelecek")
-                    .tabItem {
-                        Label("Profil", systemImage: "person.crop.circle")
-                    }
-                    .tag(4)
-            }
-            .accentColor(MenuLoTheme.Colors.primary) 
+            MainTabView()
             .environmentObject(authVM)
         }
     }

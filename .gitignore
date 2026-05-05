@@ -13,6 +13,13 @@ project.xcworkspace/xcuserdata/
 # -----
 .DS_Store
 
+# Reports / Documentation
+# ----------------------
+Analysis Report*/
+Analysis Report*.pdf
+Analysis\ Report*/
+Analysis\ Report*.pdf
+
 # Node / Backend
 # --------------
 node_modules/

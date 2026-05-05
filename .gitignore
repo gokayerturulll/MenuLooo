@@ -1,0 +1,18 @@
+# Xcode
+# -----
+build/
+DerivedData/
+*.hmap
+*.ipa
+*.xcuserstate
+project.xcworkspace/xcuserdata/
+
+# macOS
+# -----
+.DS_Store
+
+# Node / Backend
+# --------------
+node_modules/
+.env
+*.log

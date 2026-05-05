@@ -70,7 +70,7 @@ struct MainTabView: View {
                     }
                 }
                 .padding(.trailing, MenuLoTheme.Spacing.lg)
-                .padding(.bottom, 80) // TabBar'ın hemen üzerine, sağ köşeye hizalanır
+                .padding(.bottom, 120) // TabBar ve harita butonlarının üzerine çıkması için boşluk artırıldı
                 .fullScreenCover(isPresented: $showMenuBot) {
                     MenuBotView()
                 }

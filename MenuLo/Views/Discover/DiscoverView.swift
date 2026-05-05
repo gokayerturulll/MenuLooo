@@ -47,7 +47,7 @@ struct DiscoverView: View {
         MockRestaurant(name: "Kahve Durağı",        cuisine: "Kafe",       rating: 4.7, reviewCount: 410, distance: "0.2 km", priceRange: "₺",    tags: ["Kahve", "Tatlı"],             emoji: "☕️", isOpen: true,  deliveryTime: "5–10 dk"),
     ]
 
-    var filteredRestaurants: [MockRestaurant] {
+    fileprivate var filteredRestaurants: [MockRestaurant] {
         let catFiltered: [MockRestaurant]
         if selectedCategory == "Tümü" {
             catFiltered = restaurants

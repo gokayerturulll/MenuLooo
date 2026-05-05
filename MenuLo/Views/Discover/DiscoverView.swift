@@ -360,7 +360,7 @@ private struct DiscoverCategoryChip: View {
 }
 
 // MARK: - Filter Sheet
-struct FilterSheetView: View {
+private struct FilterSheetView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var dietTags: [String: Bool] = [

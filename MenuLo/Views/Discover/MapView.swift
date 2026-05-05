@@ -145,7 +145,7 @@ private struct RestaurantMapPin: View {
 }
 
 // MARK: - Filtre Sheet
-struct FilterSheetView: View {
+private struct FilterSheetView: View {
     @Environment(\.dismiss) private var dismiss
 
     // Diyet Etiketleri

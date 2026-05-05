@@ -47,29 +47,33 @@ struct MainTabView: View {
             .tint(MenuLoTheme.Colors.primary)
 
             // MARK: - Floating Action Button (MenuBot)
-            Button {
-                showMenuBot = true
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [MenuLoTheme.Colors.primary, Color(hex: "#FF6B35")],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
+            HStack {
+                Spacer()
+                Button {
+                    showMenuBot = true
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [MenuLoTheme.Colors.primary, Color(hex: "#FF6B35")],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
                             )
-                        )
-                        .frame(width: 60, height: 60)
-                        .shadow(color: MenuLoTheme.Colors.primary.opacity(0.55), radius: 14, x: 0, y: 6)
+                            .frame(width: 60, height: 60)
+                            .shadow(color: MenuLoTheme.Colors.primary.opacity(0.55), radius: 14, x: 0, y: 6)
 
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundColor(.white)
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundColor(.white)
+                    }
                 }
-            }
-            .offset(y: -28) // TabBar'ın hemen üzerine süzülür
-            .fullScreenCover(isPresented: $showMenuBot) {
-                MenuBotView()
+                .padding(.trailing, MenuLoTheme.Spacing.lg)
+                .padding(.bottom, 80) // TabBar'ın hemen üzerine, sağ köşeye hizalanır
+                .fullScreenCover(isPresented: $showMenuBot) {
+                    MenuBotView()
+                }
             }
         }
         .ignoresSafeArea(.keyboard)

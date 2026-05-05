@@ -25,7 +25,7 @@ struct MainTabView: View {
                     .tag(0)
 
                 // Tab 1: Harita
-                NavigationStack { DiscoverView() }   // Harita tab'ı — DiscoverView harita odaklı
+                NavigationStack { MapView() }   // Harita tab'ı — DiscoverView harita odaklı
                     .tabItem { Label("Harita", systemImage: selectedTab == 1 ? "map.fill" : "map") }
                     .tag(1)
 

@@ -191,7 +191,7 @@ private struct RestaurantCard: View {
         VStack(spacing: 0) {
 
             // Kapak Fotoğrafı (placeholder)
-            ZStack(alignment: .topTrailing) {
+            ZStack {
                 // Gradient Placeholder
                 LinearGradient(
                     colors: placeholderColors,
@@ -214,30 +214,34 @@ private struct RestaurantCard: View {
                     }
                 )
 
-                // Durum Rozeti
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(restaurant.isOpen ? MenuLoTheme.Colors.success : MenuLoTheme.Colors.error)
-                        .frame(width: 7, height: 7)
-                    Text(restaurant.isOpen ? "Açık" : "Kapalı")
-                        .font(.caption2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.white)
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(.black.opacity(0.45))
-                .cornerRadius(MenuLoTheme.CornerRadius.pill)
-                .padding(10)
+                // Üst Bar (Durum Rozeti & Kalp İkonu)
+                HStack(alignment: .top) {
+                    // Durum Rozeti (Sol Üst)
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(restaurant.isOpen ? MenuLoTheme.Colors.success : MenuLoTheme.Colors.error)
+                            .frame(width: 7, height: 7)
+                        Text(restaurant.isOpen ? "Açık" : "Kapalı")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.black.opacity(0.45))
+                    .cornerRadius(MenuLoTheme.CornerRadius.pill)
 
-                // Kalp İkonu
-                Button {
-                    withAnimation(.spring(response: 0.3)) { isFav.toggle() }
-                } label: {
-                    Image(systemName: isFav ? "heart.fill" : "heart")
-                        .foregroundColor(isFav ? .red : .white)
-                        .font(.system(size: 18, weight: .semibold))
-                        .shadow(color: .black.opacity(0.3), radius: 4)
+                    Spacer()
+
+                    // Kalp İkonu (Sağ Üst)
+                    Button {
+                        withAnimation(.spring(response: 0.3)) { isFav.toggle() }
+                    } label: {
+                        Image(systemName: isFav ? "heart.fill" : "heart")
+                            .foregroundColor(isFav ? .red : .white)
+                            .font(.system(size: 18, weight: .semibold))
+                            .shadow(color: .black.opacity(0.3), radius: 4)
+                    }
                 }
                 .padding(12)
                 .frame(maxHeight: .infinity, alignment: .top)

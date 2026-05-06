@@ -1,6 +1,20 @@
 import Foundation
 import SwiftUI
 
+enum NetworkError: LocalizedError {
+    case serverError(String)
+    case badURL
+    case unknown
+    
+    var errorDescription: String? {
+        switch self {
+        case .serverError(let message): return message
+        case .badURL: return "Geçersiz URL adresi."
+        case .unknown: return "Bilinmeyen bir hata oluştu."
+        }
+    }
+}
+
 class NetworkManager {
     static let shared = NetworkManager()
     
@@ -13,7 +27,7 @@ class NetworkManager {
     
     func login(email: String, password: String) async throws -> AuthResponse {
         guard let url = URL(string: "\(baseURL)/auth/login") else {
-            throw URLError(.badURL)
+            throw NetworkError.badURL
         }
         
         var request = URLRequest(url: url)
@@ -25,19 +39,31 @@ class NetworkManager {
         
         let (data, response) = try await URLSession.shared.data(for: request)
         
-        guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
-            if let errorData = try? JSONDecoder().decode(AuthResponse.self, from: data) {
-                return errorData
-            }
-            throw URLError(.badServerResponse)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.unknown
         }
         
-        return try JSONDecoder().decode(AuthResponse.self, from: data)
+        // 1. Status Code Kontrolü En Başta (200-299 dışındakiler)
+        if !(200...299).contains(httpResponse.statusCode) {
+            if let errorData = try? JSONDecoder().decode(AuthResponse.self, from: data),
+               let serverMessage = errorData.message {
+                throw NetworkError.serverError(serverMessage)
+            }
+            throw NetworkError.serverError("Giriş başarısız (Status: \(httpResponse.statusCode))")
+        }
+        
+        // 2. AuthResponse.success Kontrolü
+        let decoded = try JSONDecoder().decode(AuthResponse.self, from: data)
+        if !decoded.success {
+            throw NetworkError.serverError(decoded.message ?? "Giriş başarısız.")
+        }
+        
+        return decoded
     }
     
     func register(name: String, email: String, password: String, role: String) async throws -> AuthResponse {
         guard let url = URL(string: "\(baseURL)/auth/register") else {
-            throw URLError(.badURL)
+            throw NetworkError.badURL
         }
         
         var request = URLRequest(url: url)
@@ -54,17 +80,26 @@ class NetworkManager {
         
         let (data, response) = try await URLSession.shared.data(for: request)
         
-        // Backend'den başarılı olan durumlarda da hata mesajlarında da AuthResponse modeli döner.
-        // Hata durumunda success false olacak şekilde parse edip kullanabilmemiz için decode işlemini önce yapıyoruz:
-        if let decodedResponse = try? JSONDecoder().decode(AuthResponse.self, from: data) {
-            return decodedResponse
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.unknown
         }
         
-        guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
-            throw URLError(.badServerResponse)
+        // 1. Status Code Kontrolü En Başta (200-299 dışındakiler)
+        if !(200...299).contains(httpResponse.statusCode) {
+            if let errorData = try? JSONDecoder().decode(AuthResponse.self, from: data),
+               let serverMessage = errorData.message {
+                throw NetworkError.serverError(serverMessage)
+            }
+            throw NetworkError.serverError("Kayıt başarısız (Status: \(httpResponse.statusCode))")
         }
         
-        return try JSONDecoder().decode(AuthResponse.self, from: data)
+        // 2. AuthResponse.success Kontrolü
+        let decoded = try JSONDecoder().decode(AuthResponse.self, from: data)
+        if !decoded.success {
+            throw NetworkError.serverError(decoded.message ?? "Kayıt başarısız.")
+        }
+        
+        return decoded
     }
     
     func fetchRestaurants() async throws -> [Restaurant] {
@@ -87,5 +122,31 @@ class NetworkManager {
         
         let res = try JSONDecoder().decode(RestaurantResponse.self, from: data)
         return res.data
+    }
+    
+    func fetchRestaurantMenu(restaurantId: Int) async throws -> MenuData {
+        guard let url = URL(string: "\(baseURL)/restaurants/\(restaurantId)/menu") else {
+            throw NetworkError.badURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        
+        if !token.isEmpty {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.unknown
+        }
+        
+        if !(200...299).contains(httpResponse.statusCode) {
+            throw NetworkError.serverError("Menü getirilemedi (Status: \(httpResponse.statusCode))")
+        }
+        
+        let decoded = try JSONDecoder().decode(MenuResponse.self, from: data)
+        return decoded.data
     }
 }

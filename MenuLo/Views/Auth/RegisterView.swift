@@ -122,6 +122,18 @@ struct RegisterView: View {
             }
             .padding(.horizontal, MenuLoTheme.Spacing.lg)
 
+            // Hata Mesajı Alanı
+            if authVM.showError && !authVM.errorMessage.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                    Text(authVM.errorMessage)
+                        .font(MenuLoTheme.Fonts.caption)
+                }
+                .foregroundColor(.red)
+                .transition(.opacity)
+            }
+
             PrimaryButton(title: "Hesap Oluştur", isLoading: authVM.isLoading) {
                 authVM.register(
                     name: customerName,
@@ -178,6 +190,18 @@ struct RegisterView: View {
             .background(MenuLoTheme.Colors.primary.opacity(0.08))
             .clipShape(RoundedRectangle(cornerRadius: MenuLoTheme.CornerRadius.medium))
             .padding(.horizontal, MenuLoTheme.Spacing.lg)
+
+            // Hata Mesajı Alanı
+            if authVM.showError && !authVM.errorMessage.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                    Text(authVM.errorMessage)
+                        .font(MenuLoTheme.Fonts.caption)
+                }
+                .foregroundColor(.red)
+                .transition(.opacity)
+            }
 
             PrimaryButton(title: "İşletme Hesabı Oluştur", isLoading: authVM.isLoading) {
                 authVM.register(

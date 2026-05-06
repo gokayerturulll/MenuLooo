@@ -48,7 +48,7 @@ exports.getRestaurantMenu = async (req, res) => {
                         json_build_object(
                             'item_id', mi.item_id,
                             'name', mi.name,
-                            'price', mi.price,
+                            'price', mi.price::float,
                             'description', mi.description,
                             'image_url', mi.image_url,
                             'dietary_tags', mi.dietary_tags

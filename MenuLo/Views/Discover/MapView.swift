@@ -20,6 +20,9 @@ struct MapView: View {
         center: CLLocationCoordinate2D(latitude: 40.990, longitude: 29.025),
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
     )
+    
+    @State private var selectedRestaurant: Restaurant? = nil
+    @State private var navigatedRestaurant: Restaurant? = nil
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -31,7 +34,9 @@ struct MapView: View {
                 annotationItems: viewModel.restaurants
             ) { restaurant in
                 MapAnnotation(coordinate: restaurant.coordinate) {
-                    RestaurantMapPin(restaurant: restaurant)
+                    RestaurantMapPin(restaurant: restaurant) {
+                        selectedRestaurant = restaurant
+                    }
                 }
             }
             .ignoresSafeArea(edges: .top)
@@ -104,6 +109,19 @@ struct MapView: View {
         .sheet(isPresented: $showFilterSheet) {
             FilterSheetView()
         }
+        .sheet(item: $selectedRestaurant) { restaurant in
+            RestaurantHalfSheetView(restaurant: restaurant) {
+                selectedRestaurant = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    navigatedRestaurant = restaurant
+                }
+            }
+            .presentationDetents([.fraction(0.32)])
+            .presentationDragIndicator(.visible)
+        }
+        .navigationDestination(item: $navigatedRestaurant) { restaurant in
+            RestaurantDetailView(restaurant: restaurant)
+        }
         .onAppear {
             Task { await viewModel.fetchNearbyRestaurants() }
         }
@@ -114,9 +132,15 @@ struct MapView: View {
 private struct RestaurantMapPin: View {
     let restaurant: Restaurant
     @State private var isExpanded = false
+    let onTap: () -> Void
 
     var body: some View {
-        Button { withAnimation(.spring()) { isExpanded.toggle() } } label: {
+        Button {
+            withAnimation(.spring()) {
+                isExpanded.toggle()
+            }
+            onTap()
+        } label: {
             VStack(spacing: 2) {
                 HStack(spacing: 4) {
                     Image(systemName: "fork.knife")
@@ -141,6 +165,66 @@ private struct RestaurantMapPin: View {
                     .rotationEffect(.degrees(180))
             }
         }
+    }
+}
+
+// MARK: - Restaurant Half Sheet
+private struct RestaurantHalfSheetView: View {
+    let restaurant: Restaurant
+    let onMenuTap: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        VStack(spacing: MenuLoTheme.Spacing.md) {
+            HStack(spacing: MenuLoTheme.Spacing.md) {
+                Text(restaurant.emoji)
+                    .font(.system(size: 44))
+                    .padding(8)
+                    .background(MenuLoTheme.Colors.primary.opacity(0.1))
+                    .clipShape(Circle())
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(restaurant.businessName)
+                        .font(MenuLoTheme.Fonts.title)
+                        .foregroundColor(MenuLoTheme.Colors.textPrimary)
+                    
+                    HStack(spacing: 4) {
+                        Image(systemName: "star.fill")
+                            .font(.caption2)
+                            .foregroundColor(.yellow)
+                        Text(String(format: "%.1f", restaurant.rating))
+                            .font(MenuLoTheme.Fonts.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(MenuLoTheme.Colors.textPrimary)
+                        Text("•")
+                            .font(MenuLoTheme.Fonts.caption)
+                            .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                        Text(restaurant.cuisine)
+                            .font(MenuLoTheme.Fonts.caption)
+                            .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                    }
+                }
+                Spacer()
+            }
+            .padding(.horizontal)
+            
+            Button {
+                onMenuTap()
+            } label: {
+                Text("Menüyü Gör")
+                    .font(MenuLoTheme.Fonts.button)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(MenuLoTheme.Colors.primary)
+                    .cornerRadius(MenuLoTheme.CornerRadius.medium)
+                    .shadow(color: MenuLoTheme.Colors.primary.opacity(0.3), radius: 6, x: 0, y: 3)
+            }
+            .padding(.horizontal)
+            .padding(.bottom)
+        }
+        .padding(.top)
+        .background(MenuLoTheme.Colors.backgroundLight.ignoresSafeArea())
     }
 }
 

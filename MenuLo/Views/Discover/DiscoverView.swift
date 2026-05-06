@@ -137,8 +137,11 @@ struct DiscoverView: View {
                             .padding(.top, 60)
                         } else {
                             ForEach(filteredRestaurants) { restaurant in
-                                RestaurantCard(restaurant: restaurant)
-                                    .padding(.horizontal, MenuLoTheme.Spacing.lg)
+                                NavigationLink(destination: RestaurantDetailView(restaurant: restaurant)) {
+                                    RestaurantCard(restaurant: restaurant)
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                                .padding(.horizontal, MenuLoTheme.Spacing.lg)
                             }
                         }
                     }

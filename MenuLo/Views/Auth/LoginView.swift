@@ -50,7 +50,19 @@ struct LoginView: View {
                 }
                 .padding(.horizontal, MenuLoTheme.Spacing.lg)
                 
-                // 3. Giriş Butonu
+                // 3. Hata Mesajı Alanı
+                if authVM.showError && !authVM.errorMessage.isEmpty {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                        Text(authVM.errorMessage)
+                            .font(MenuLoTheme.Fonts.caption)
+                    }
+                    .foregroundColor(.red)
+                    .transition(.opacity)
+                }
+                
+                // 4. Giriş Butonu
                 PrimaryButton(title: "Giriş Yap", isLoading: authVM.isLoading) {
                     authVM.login(email: email, password: password)
                 }
@@ -75,13 +87,9 @@ struct LoginView: View {
             .background(MenuLoTheme.Colors.backgroundLight.ignoresSafeArea())
             // Klavyenin üstteki içerikleri ezmemesi için ekranı yukarı kaydırır
             .ignoresSafeArea(.keyboard, edges: .bottom)
-        }
-        .alert("Giriş Başarısız", isPresented: $authVM.showError) {
-            Button("Tamam", role: .cancel) {
+            .onDisappear {
                 authVM.clearError()
             }
-        } message: {
-            Text(authVM.errorMessage)
         }
     }
 }

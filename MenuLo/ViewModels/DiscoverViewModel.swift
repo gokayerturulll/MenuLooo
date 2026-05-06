@@ -88,18 +88,16 @@ class DiscoverViewModel: ObservableObject {
         await fetchNearbyRestaurants(forceRefresh: true)
     }
 
-    /// Arama çubuğu için: isim / adres / mutfak üzerinde case-insensitive eşleşme.
-    /// Boş query'de boş dizi döner — overlay'in görünmemesi için MapView bunu kontrol eder.
+    /// Arama çubuğu için: SADECE restoranın adı (businessName) üzerinde
+    /// case-insensitive eşleşme. Adres ve mutfak alanları kasıtlı olarak
+    /// kapsam dışında — kullanıcı "ataşehir" yazdığında adında bu kelime
+    /// geçen yerler dönsün, adresi Ataşehir olan kebapçılar dönmesin.
+    /// Boş query'de boş dizi döner.
     func searchResults(for query: String, limit: Int = 10) -> [Restaurant] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
-        let needle = trimmed.lowercased()
         return restaurants
-            .filter { r in
-                r.businessName.lowercased().contains(needle)
-                || (r.address ?? "").lowercased().contains(needle)
-                || r.cuisine.lowercased().contains(needle)
-            }
+            .filter { $0.businessName.localizedCaseInsensitiveContains(trimmed) }
             .prefix(limit)
             .map { $0 }
     }

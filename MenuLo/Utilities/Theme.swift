@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 // MARK: - MenuLo Tema Tanımları
 
@@ -23,36 +24,57 @@ struct MenuLoTheme {
     // MARK: - Renkler
     
     /// Uygulama renk paleti.
+    ///
+    /// **Brand renkleri** (primary, success, warning, error) sabittir — marka kimliği
+    /// her iki modda aynı kalır.
+    /// **Semantic renkler** (background, card, text, divider) iOS sistem trait'ine
+    /// göre otomatik olarak light ↔ dark arasında geçiş yapar.
     struct Colors {
+
+        // MARK: Brand (sabit, marka kimliği)
+
         /// Ana marka rengi — turuncu (#FFA63B)
         static let primary = Color(hex: "#FFA63B")
-        
-        /// Koyu arka plan (Dark Mode uyumlu)
-        static let backgroundDark = Color(hex: "#1A1A2E")
-        
-        /// Açık arka plan
-        static let backgroundLight = Color(hex: "#F8F9FA")
-        
-        /// Ana metin rengi
-        static let textPrimary = Color(hex: "#2D3436")
-        
-        /// İkincil metin rengi (açıklamalar, alt başlıklar)
-        static let textSecondary = Color(hex: "#636E72")
-        
+
         /// Başarı rengi (yeşil — Green Menu vb.)
         static let success = Color(hex: "#00B894")
-        
+
         /// Uyarı rengi
         static let warning = Color(hex: "#FDCB6E")
-        
+
         /// Hata rengi
         static let error = Color(hex: "#E17055")
-        
-        /// Kart arka plan rengi
-        static let cardBackground = Color(hex: "#FFFFFF")
-        
+
+        // MARK: Semantic (light/dark adaptive)
+
+        /// Sayfa arka planı — açık modda neredeyse beyaz, koyu modda neredeyse siyah
+        static let backgroundLight = adaptive(light: "#F8F9FA", dark: "#0F1116")
+
+        /// Kart arka planı — açık modda saf beyaz, koyu modda elevated yüzey
+        static let cardBackground = adaptive(light: "#FFFFFF", dark: "#1C1C1E")
+
+        /// Ana metin rengi — açık modda koyu, koyu modda neredeyse beyaz
+        static let textPrimary = adaptive(light: "#2D3436", dark: "#F2F2F7")
+
+        /// İkincil metin rengi (açıklamalar, alt başlıklar)
+        static let textSecondary = adaptive(light: "#636E72", dark: "#98989F")
+
         /// Ayırıcı çizgi rengi
-        static let divider = Color(hex: "#DFE6E9")
+        static let divider = adaptive(light: "#DFE6E9", dark: "#38383A")
+
+        /// Geriye dönük uyum: bazı view'lar `backgroundDark`'ı doğrudan referans
+        /// ediyor olabilir. Yeni adaptive `backgroundLight`'a yönlendirildi.
+        static let backgroundDark = backgroundLight
+
+        // MARK: Helpers
+
+        /// Bir UIColor closure üzerinden iki hex string arasında otomatik
+        /// light/dark seçimi yapan SwiftUI Color üretir.
+        private static func adaptive(light: String, dark: String) -> Color {
+            Color(uiColor: UIColor { trait in
+                UIColor(Color(hex: trait.userInterfaceStyle == .dark ? dark : light))
+            })
+        }
     }
     
     // MARK: - Tipografi (Gabarito Font Ailesi)

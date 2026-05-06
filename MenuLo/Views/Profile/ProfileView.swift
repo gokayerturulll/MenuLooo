@@ -142,10 +142,15 @@ private struct ProfileHeroSection: View {
     let authViewModel: AuthViewModel
 
     var body: some View {
-        VStack(spacing: MenuLoTheme.Spacing.lg) {
+        VStack(alignment: .center, spacing: MenuLoTheme.Spacing.lg) {
 
-            // Avatar + Kamera Rozeti
-            ZStack(alignment: .bottomTrailing) {
+            // Avatar + Kamera Rozeti — HStack + Spacer ile yatayda kesin ortala
+            // (kamera ikonunun offset'i ZStack genişliğini etkilediğinden
+            //  düz VStack alignment'ı görsel merkezi kaçırıyordu).
+            
+                
+                // Avatar + Kamera Rozeti
+            ZStack {
                 // Gradient Ring
                 Circle()
                     .strokeBorder(
@@ -174,29 +179,36 @@ private struct ProfileHeroSection: View {
                             .foregroundColor(.white)
                     )
                     .shadow(color: MenuLoTheme.Colors.primary.opacity(0.3), radius: 12)
-
-                // Kamera İkonu
+            }
+            // Kamera ikonunu ana çemberin yapısını bozmadan dışarıdan ekliyoruz
+            .overlay(alignment: .bottomTrailing) {
                 Circle()
                     .fill(MenuLoTheme.Colors.success)
-                    .frame(width: 26, height: 26)
+                    .frame(width: 28, height: 28) // Kamera rozetini bir tık büyüttüm, daha şık durur
                     .overlay(
                         Image(systemName: "camera.fill")
                             .font(.system(size: 12))
                             .foregroundColor(.white)
                     )
-                    .offset(x: 2, y: 2)
+                    .offset(x: 4, y: 4) // Rozeti çemberin hafif dışına taşırır
             }
+            .frame(maxWidth: .infinity, alignment: .center) // Ekrana jilet gibi ortalar
+                
+            
+            
 
-            // İsim / Mail
-            VStack(spacing: 4) {
+            // İsim / Mail — yatayda kesin ortala
+            VStack(alignment: .center, spacing: 4) {
                 Text(authViewModel.currentUser?.name ?? "Kullanıcı Adı")
                     .font(MenuLoTheme.Fonts.title)
                     .fontWeight(.bold)
                     .foregroundColor(MenuLoTheme.Colors.textPrimary)
+                    .multilineTextAlignment(.center)
 
                 Text(authViewModel.currentUser?.email ?? "kullanici@menulo.com")
                     .font(MenuLoTheme.Fonts.body)
                     .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
 
                 // Tip rozeti
                 Text(authViewModel.currentUser?.userType.displayName ?? "Müşteri")
@@ -216,6 +228,7 @@ private struct ProfileHeroSection: View {
                     )
                     .cornerRadius(MenuLoTheme.CornerRadius.pill)
             }
+            .frame(maxWidth: .infinity)
 
             // İstatistik Satırı
             HStack(spacing: 0) {
@@ -236,6 +249,7 @@ private struct ProfileHeroSection: View {
             )
         }
         .padding(MenuLoTheme.Spacing.lg)
+        .frame(maxWidth: .infinity)
         .background(MenuLoTheme.Colors.cardBackground)
     }
 

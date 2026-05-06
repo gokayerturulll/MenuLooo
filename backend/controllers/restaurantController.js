@@ -40,18 +40,18 @@ exports.getRestaurantMenu = async (req, res) => {
         
         // Kategorileri ve her kategorinin altındaki ürünleri json_agg ile çek
         const query = `
-            SELECT 
-                c.category_id, 
+            SELECT
+                c.category_id,
                 c.name as category_name,
                 COALESCE(
                     json_agg(
                         json_build_object(
                             'item_id', mi.item_id,
                             'name', mi.name,
-                            'price', mi.price::float,
+                            'price', (mi.price)::double precision,
                             'description', mi.description,
                             'image_url', mi.image_url,
-                            'dietary_tags', mi.dietary_tags
+                            'dietary_tags', COALESCE(mi.dietary_tags, ARRAY[]::text[])
                         )
                     ) FILTER (WHERE mi.item_id IS NOT NULL), '[]'
                 ) as items
@@ -61,14 +61,14 @@ exports.getRestaurantMenu = async (req, res) => {
             GROUP BY c.category_id, c.name
             ORDER BY c.category_id
         `;
-        
+
         const categoriesResult = await pool.query(query, [menuId]);
-        
+
         res.status(200).json({
             success: true,
             data: {
-                menu_id: menuId,
-                restaurant_id: id,
+                menu_id: Number(menuId),
+                restaurant_id: parseInt(id, 10),
                 categories: categoriesResult.rows
             }
         });

@@ -24,6 +24,7 @@ final class MenuLoTests: XCTestCase {
         XCTAssertEqual(user.userType, .customer)
     }
     
+    @MainActor
     func testAuthViewModelInitialState() {
         let vm = AuthViewModel()
         XCTAssertFalse(vm.isAuthenticated)

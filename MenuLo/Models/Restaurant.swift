@@ -7,13 +7,21 @@ struct RestaurantResponse: Codable {
     let data: [Restaurant]
 }
 
-struct Restaurant: Codable, Identifiable {
+struct Restaurant: Codable, Identifiable, Hashable {
     let restaurantId: Int
     let ownerId: Int
     let businessName: String
     let address: String?
-    
+
     var id: Int { restaurantId }
+
+    static func == (lhs: Restaurant, rhs: Restaurant) -> Bool {
+        lhs.restaurantId == rhs.restaurantId
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(restaurantId)
+    }
     
     // Geriye dönük uyumluluk: MapView ve diğer eski view'ların bozulmaması için
     var name: String { businessName }

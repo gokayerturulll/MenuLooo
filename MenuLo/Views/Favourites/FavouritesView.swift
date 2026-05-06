@@ -10,8 +10,8 @@ import SwiftUI
 struct FavouritesView: View {
 
     @EnvironmentObject var favouritesManager: FavouritesManager
-    @StateObject private var viewModel = DiscoverViewModel()
-    
+    @EnvironmentObject var viewModel: DiscoverViewModel
+
     @State private var sortOption = "Rating"
     let sortOptions = ["Rating", "Mesafe", "A–Z"]
 
@@ -114,9 +114,6 @@ struct FavouritesView: View {
             .background(MenuLoTheme.Colors.backgroundLight)
             .navigationTitle("Favorilerim")
             .navigationBarTitleDisplayMode(.large)
-            .onAppear {
-                Task { await viewModel.fetchNearbyRestaurants() }
-            }
         }
     }
 }
@@ -262,4 +259,5 @@ private struct FavRestaurantCard: View {
 #Preview {
     FavouritesView()
         .environmentObject(FavouritesManager())
+        .environmentObject(DiscoverViewModel())
 }

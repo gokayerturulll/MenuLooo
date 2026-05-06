@@ -11,7 +11,7 @@ import SwiftUI
 import MapKit
 
 struct MapView: View {
-    @StateObject private var viewModel = DiscoverViewModel()
+    @EnvironmentObject var viewModel: DiscoverViewModel
     @State private var searchText     = ""
     @State private var showFilterSheet = false
 
@@ -20,11 +20,27 @@ struct MapView: View {
         center: CLLocationCoordinate2D(latitude: 40.990, longitude: 29.025),
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
     )
-    
+
     @State private var selectedRestaurant: Restaurant? = nil
-    @State private var navigatedRestaurant: Restaurant? = nil
+    @State private var path = NavigationPath()
+    @FocusState private var isSearchFocused: Bool
+
+    private var searchResults: [Restaurant] {
+        viewModel.searchResults(for: searchText)
+    }
 
     var body: some View {
+        NavigationStack(path: $path) {
+            content
+                .navigationTitle("Discover")
+                .navigationBarTitleDisplayMode(.inline)
+                .navigationDestination(for: Restaurant.self) { restaurant in
+                    RestaurantDetailView(restaurant: restaurant)
+                }
+        }
+    }
+
+    private var content: some View {
         ZStack(alignment: .top) {
 
             // MARK: - Tam Ekran Harita
@@ -41,8 +57,8 @@ struct MapView: View {
             }
             .ignoresSafeArea(edges: .top)
 
-            // MARK: - Üstte Yüzen Arama + Filtre
-            VStack(spacing: 0) {
+            // MARK: - Üstte Yüzen Arama + Filtre + Sonuç Listesi
+            VStack(spacing: MenuLoTheme.Spacing.sm) {
                 HStack(spacing: MenuLoTheme.Spacing.sm) {
                     // Arama Çubuğu
                     HStack {
@@ -51,9 +67,15 @@ struct MapView: View {
 
                         TextField("Mekan veya lezzet ara...", text: $searchText)
                             .font(MenuLoTheme.Fonts.body)
+                            .focused($isSearchFocused)
+                            .submitLabel(.search)
+                            .autocorrectionDisabled()
 
                         if !searchText.isEmpty {
-                            Button { searchText = "" } label: {
+                            Button {
+                                searchText = ""
+                                isSearchFocused = false
+                            } label: {
                                 Image(systemName: "xmark.circle.fill")
                                     .foregroundColor(MenuLoTheme.Colors.textSecondary)
                             }
@@ -82,6 +104,16 @@ struct MapView: View {
                 .padding(.horizontal, MenuLoTheme.Spacing.md)
                 .padding(.top, MenuLoTheme.Spacing.sm)
 
+                // MARK: - Arama Sonuçları (Autocomplete)
+                if !searchText.isEmpty {
+                    SearchResultsOverlay(
+                        results: searchResults,
+                        onSelect: { focusOnRestaurant($0) }
+                    )
+                    .padding(.horizontal, MenuLoTheme.Spacing.md)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+
                 Spacer()
 
                 // Konumuma Git Butonu
@@ -89,7 +121,12 @@ struct MapView: View {
                     Spacer()
                     Button {
                         if let userLoc = viewModel.userLocation {
-                            withAnimation { mapRegion.center = userLoc }
+                            withAnimation(.easeInOut(duration: 0.5)) {
+                                mapRegion = MKCoordinateRegion(
+                                    center: userLoc,
+                                    span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)
+                                )
+                            }
                         }
                     } label: {
                         Image(systemName: "location.fill")
@@ -103,28 +140,125 @@ struct MapView: View {
                     .padding(.bottom, MenuLoTheme.Spacing.lg)
                 }
             }
+            .animation(.easeInOut(duration: 0.2), value: searchText.isEmpty)
         }
-        .navigationTitle("Discover")
-        .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showFilterSheet) {
             FilterSheetView()
         }
         .sheet(item: $selectedRestaurant) { restaurant in
             RestaurantHalfSheetView(restaurant: restaurant) {
+                let target = restaurant
                 selectedRestaurant = nil
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    navigatedRestaurant = restaurant
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    path.append(target)
                 }
             }
             .presentationDetents([.fraction(0.32)])
             .presentationDragIndicator(.visible)
         }
-        .navigationDestination(item: $navigatedRestaurant) { restaurant in
-            RestaurantDetailView(restaurant: restaurant)
+    }
+
+    // MARK: - Camera Fly-to + Auto Sheet
+    private func focusOnRestaurant(_ restaurant: Restaurant) {
+        searchText = ""
+        isSearchFocused = false
+
+        withAnimation(.easeInOut(duration: 0.6)) {
+            mapRegion = MKCoordinateRegion(
+                center: restaurant.coordinate,
+                span: MKCoordinateSpan(latitudeDelta: 0.008, longitudeDelta: 0.008)
+            )
         }
-        .onAppear {
-            Task { await viewModel.fetchNearbyRestaurants() }
+
+        // Kamera kayması bittikten sonra yarım sheet otomatik açılsın
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
+            selectedRestaurant = restaurant
         }
+    }
+}
+
+// MARK: - Search Results Overlay
+private struct SearchResultsOverlay: View {
+    let results: [Restaurant]
+    let onSelect: (Restaurant) -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if results.isEmpty {
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                    Text("Eşleşen restoran bulunamadı")
+                        .font(MenuLoTheme.Fonts.body)
+                        .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                    Spacer()
+                }
+                .padding(MenuLoTheme.Spacing.md)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(results.enumerated()), id: \.element.id) { index, r in
+                            Button {
+                                onSelect(r)
+                            } label: {
+                                SearchResultRow(restaurant: r)
+                            }
+                            .buttonStyle(.plain)
+
+                            if index < results.count - 1 {
+                                Divider()
+                                    .padding(.leading, 60)
+                            }
+                        }
+                    }
+                }
+                .frame(maxHeight: 320)
+            }
+        }
+        .background(.regularMaterial)
+        .cornerRadius(MenuLoTheme.CornerRadius.large)
+        .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 6)
+    }
+}
+
+private struct SearchResultRow: View {
+    let restaurant: Restaurant
+
+    var body: some View {
+        HStack(spacing: MenuLoTheme.Spacing.md) {
+            Text(restaurant.emoji)
+                .font(.system(size: 24))
+                .frame(width: 44, height: 44)
+                .background(MenuLoTheme.Colors.primary.opacity(0.1))
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(restaurant.businessName)
+                    .font(MenuLoTheme.Fonts.body)
+                    .fontWeight(.semibold)
+                    .foregroundColor(MenuLoTheme.Colors.textPrimary)
+                    .lineLimit(1)
+
+                HStack(spacing: 4) {
+                    Image(systemName: "mappin.circle.fill")
+                        .font(.caption2)
+                        .foregroundColor(MenuLoTheme.Colors.primary)
+                    Text(restaurant.address ?? restaurant.cuisine)
+                        .font(MenuLoTheme.Fonts.caption)
+                        .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer()
+
+            Image(systemName: "arrow.up.left")
+                .font(.footnote)
+                .foregroundColor(MenuLoTheme.Colors.textSecondary)
+        }
+        .padding(.horizontal, MenuLoTheme.Spacing.md)
+        .padding(.vertical, MenuLoTheme.Spacing.sm)
+        .contentShape(Rectangle())
     }
 }
 
@@ -451,7 +585,6 @@ private struct FilterToggleRow: View {
 
 // MARK: - Preview
 #Preview {
-    NavigationStack {
-        DiscoverView()
-    }
+    MapView()
+        .environmentObject(DiscoverViewModel())
 }

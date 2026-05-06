@@ -19,8 +19,9 @@ class NetworkManager {
     static let shared = NetworkManager()
     
     // Simülatör localhost erişimi. Gerçek cihazda Mac'in IP adresini girmelisin.
-    private let baseURL = "http://localhost:3000/api"
-    
+    //private let baseURL = "http://localhost:3000/api"
+    private let baseURL = "https://utopia-simmering-mandolin.ngrok-free.dev/api" 
+    //private let baseURL = "http://10.81.21.76/api"
     @AppStorage("authToken") private var token: String = ""
     
     private init() {}

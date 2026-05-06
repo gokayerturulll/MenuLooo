@@ -90,6 +90,13 @@ struct RegisterView: View {
         }
         .background(MenuLoTheme.Colors.backgroundLight.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
+        .alert("Kayıt Başarısız", isPresented: $authVM.showError) {
+            Button("Tamam", role: .cancel) {
+                authVM.clearError()
+            }
+        } message: {
+            Text(authVM.errorMessage)
+        }
     }
 
     // MARK: - Müşteri Formu

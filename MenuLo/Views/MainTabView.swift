@@ -29,9 +29,9 @@ struct MainTabView: View {
                     .tabItem { Label("Harita", systemImage: selectedTab == 1 ? "map.fill" : "map") }
                     .tag(1)
 
-                // Tab 2: Boş — FAB için alan ayırıyoruz (placeholder)
-                Color.clear
-                    .tabItem { Label("", systemImage: "circle") }
+                // Tab 2: QR / Grup Karar Odası
+                NavigationStack { QRScanView() }
+                    .tabItem { Label("Oda", systemImage: selectedTab == 2 ? "qrcode.viewfinder" : "qrcode") }
                     .tag(2)
 
                 // Tab 3: Favoriler

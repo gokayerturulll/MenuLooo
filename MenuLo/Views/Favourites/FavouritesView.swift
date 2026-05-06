@@ -2,94 +2,26 @@
 //  FavouritesView.swift
 //  MenuLo
 //
-//  Kullanıcının kalp ikonuyla beğendiği restoranlar ve menü ürünleri.
-//  DiscoverView mock restoran verisinden 3 tanesi seçildi.
+//  Kullanıcının kalp ikonuyla beğendiği restoranlar.
 //
 
 import SwiftUI
 
-// MARK: - Mock Models (fileprivate — aynı dosya scope'u)
-fileprivate struct FavouriteRestaurant: Identifiable {
-    let id = UUID()
-    let name: String
-    let cuisine: String
-    let rating: Double
-    let reviewCount: Int
-    let priceRange: String
-    let distance: String
-    let emoji: String
-    let tags: [String]
-    let gradientColors: [Color]
-}
-
-fileprivate struct FavouriteItem: Identifiable {
-    let id = UUID()
-    let name: String
-    let restaurantName: String
-    let price: Double
-    let emoji: String
-    let isGreenMenu: Bool
-}
-
-// MARK: - FavouritesView
 struct FavouritesView: View {
 
-    @State private var selectedSegment = 0
+    @EnvironmentObject var favouritesManager: FavouritesManager
+    @StateObject private var viewModel = DiscoverViewModel()
+    
     @State private var sortOption = "Rating"
-    let sortOptions = ["Rating", "Low to High", "High to Low", "Distance", "A–Z"]
+    let sortOptions = ["Rating", "Mesafe", "A–Z"]
 
-    fileprivate let mockRestaurants: [FavouriteRestaurant] = [
-        FavouriteRestaurant(
-            name: "Gusto Pizzeria", cuisine: "İtalyan", rating: 4.8, reviewCount: 312,
-            priceRange: "₺₺", distance: "0.4 km", emoji: "🍕",
-            tags: ["Pizza", "Vegan Option"],
-            gradientColors: [Color(hex: "#FF6B6B"), Color(hex: "#FFA63B")]
-        ),
-        FavouriteRestaurant(
-            name: "Kadıköy Burger House", cuisine: "Amerikan", rating: 4.7, reviewCount: 198,
-            priceRange: "₺", distance: "0.7 km", emoji: "🍔",
-            tags: ["Burger", "Pet Friendly"],
-            gradientColors: [Color(hex: "#E17055"), Color(hex: "#FAB1A0")]
-        ),
-        FavouriteRestaurant(
-            name: "Green Bowl", cuisine: "Vegan", rating: 4.6, reviewCount: 241,
-            priceRange: "₺₺", distance: "0.9 km", emoji: "🥗",
-            tags: ["Vegan", "Gluten Free"],
-            gradientColors: [Color(hex: "#00B894"), Color(hex: "#55EFC4")]
-        ),
-        FavouriteRestaurant(
-            name: "Pastane 1888", cuisine: "Pastane", rating: 4.9, reviewCount: 523,
-            priceRange: "₺", distance: "0.3 km", emoji: "🍰",
-            tags: ["Tatlı", "Kahve"],
-            gradientColors: [Color(hex: "#FDCB6E"), Color(hex: "#E0752A")]
-        ),
-    ]
-
-    fileprivate let mockItems: [FavouriteItem] = [
-        FavouriteItem(name: "Margherita Pizza",   restaurantName: "Gusto Pizzeria",        price: 149, emoji: "🍕", isGreenMenu: false),
-        FavouriteItem(name: "Wagyu Burger",        restaurantName: "Kadıköy Burger House",  price: 199, emoji: "🍔", isGreenMenu: false),
-        FavouriteItem(name: "Akşam Özel Tavuk",   restaurantName: "Green Bowl",            price: 89,  emoji: "🍗", isGreenMenu: true),
-        FavouriteItem(name: "Kırmızı Kadife Kek", restaurantName: "Pastane 1888",          price: 65,  emoji: "🍰", isGreenMenu: false),
-        FavouriteItem(name: "Matcha Latte",        restaurantName: "Kahve Durağı",          price: 55,  emoji: "🍵", isGreenMenu: true),
-    ]
-
-    fileprivate var sortedRestaurants: [FavouriteRestaurant] {
+    fileprivate var sortedRestaurants: [Restaurant] {
+        let favs = viewModel.restaurants.filter { favouritesManager.favoriteRestaurantIDs.contains($0.id) }
         switch sortOption {
-        case "Low to High": return mockRestaurants.sorted { $0.priceRange.count < $1.priceRange.count }
-        case "High to Low": return mockRestaurants.sorted { $0.priceRange.count > $1.priceRange.count }
-        case "Rating":      return mockRestaurants.sorted { $0.rating > $1.rating }
-        case "Distance":    return mockRestaurants.sorted { $0.distance < $1.distance }
-        case "A–Z":         return mockRestaurants.sorted { $0.name < $1.name }
-        default:            return mockRestaurants
-        }
-    }
-
-    fileprivate var sortedItems: [FavouriteItem] {
-        switch sortOption {
-        case "Low to High": return mockItems.sorted { $0.price < $1.price }
-        case "High to Low": return mockItems.sorted { $0.price > $1.price }
-        case "A–Z":         return mockItems.sorted { $0.name < $1.name }
-        default:            return mockItems
+        case "Rating":      return favs.sorted { $0.rating > $1.rating }
+        case "Mesafe":      return favs.sorted { $0.distance < $1.distance }
+        case "A–Z":         return favs.sorted { $0.name < $1.name }
+        default:            return favs
         }
     }
 
@@ -97,93 +29,93 @@ struct FavouritesView: View {
         NavigationStack {
             VStack(spacing: 0) {
 
-                // MARK: - Üst İstatistik Banner
-                HStack(spacing: 0) {
-                    FavStatItem(value: "\(mockRestaurants.count)", label: "Restoran", icon: "building.2.fill", color: MenuLoTheme.Colors.primary)
-                    Divider().frame(height: 36)
-                    FavStatItem(value: "\(mockItems.count)", label: "Ürün", icon: "fork.knife", color: MenuLoTheme.Colors.success)
-                    Divider().frame(height: 36)
-                    FavStatItem(value: "4.7", label: "Ort. Puan", icon: "star.fill", color: .yellow)
-                }
-                .padding(.vertical, MenuLoTheme.Spacing.md)
-                .background(MenuLoTheme.Colors.cardBackground)
-                .shadow(color: .black.opacity(0.05), radius: 6, x: 0, y: 3)
-
-                // MARK: - Segmented Control
-                Picker("Tür", selection: $selectedSegment) {
-                    Text("Restoranlar (\(mockRestaurants.count))").tag(0)
-                    Text("Ürünler (\(mockItems.count))").tag(1)
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, MenuLoTheme.Spacing.lg)
-                .padding(.vertical, MenuLoTheme.Spacing.md)
-
-                // MARK: - Sort Bar
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: MenuLoTheme.Spacing.sm) {
-                        Image(systemName: "arrow.up.arrow.down")
-                            .font(.caption)
+                if sortedRestaurants.isEmpty {
+                    // MARK: - Empty State
+                    Spacer()
+                    VStack(spacing: MenuLoTheme.Spacing.lg) {
+                        ZStack {
+                            Circle()
+                                .fill(MenuLoTheme.Colors.primary.opacity(0.1))
+                                .frame(width: 120, height: 120)
+                            Image(systemName: "heart.slash")
+                                .font(.system(size: 50))
+                                .foregroundColor(MenuLoTheme.Colors.primary)
+                        }
+                        
+                        Text("Henüz Favori Mekan Yok")
+                            .font(MenuLoTheme.Fonts.title)
+                            .foregroundColor(MenuLoTheme.Colors.textPrimary)
+                        
+                        Text("Keşfet ekranından beğendiğin restoranları kalp ikonuna dokunarak buraya ekleyebilirsin.")
+                            .font(MenuLoTheme.Fonts.body)
                             .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, MenuLoTheme.Spacing.xl)
+                    }
+                    Spacer()
+                } else {
+                    // MARK: - Üst İstatistik Banner
+                    HStack(spacing: 0) {
+                        FavStatItem(value: "\(favouritesManager.favoriteRestaurantIDs.count)", label: "Restoran", icon: "building.2.fill", color: MenuLoTheme.Colors.primary)
+                    }
+                    .padding(.vertical, MenuLoTheme.Spacing.md)
+                    .background(MenuLoTheme.Colors.cardBackground)
+                    .shadow(color: .black.opacity(0.05), radius: 6, x: 0, y: 3)
 
-                        ForEach(sortOptions, id: \.self) { opt in
-                            Button {
-                                withAnimation { sortOption = opt }
-                            } label: {
-                                Text(opt)
-                                    .font(MenuLoTheme.Fonts.caption)
-                                    .fontWeight(sortOption == opt ? .semibold : .regular)
-                                    .foregroundColor(sortOption == opt ? .white : MenuLoTheme.Colors.textSecondary)
-                                    .padding(.horizontal, MenuLoTheme.Spacing.md)
-                                    .padding(.vertical, 6)
-                                    .background(sortOption == opt ? MenuLoTheme.Colors.primary : MenuLoTheme.Colors.cardBackground)
-                                    .cornerRadius(MenuLoTheme.CornerRadius.pill)
-                                    .overlay(
-                                        Capsule()
-                                            .strokeBorder(
-                                                sortOption == opt ? Color.clear : MenuLoTheme.Colors.divider,
-                                                lineWidth: 1
-                                            )
-                                    )
+                    // MARK: - Sort Bar
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: MenuLoTheme.Spacing.sm) {
+                            Image(systemName: "arrow.up.arrow.down")
+                                .font(.caption)
+                                .foregroundColor(MenuLoTheme.Colors.textSecondary)
+
+                            ForEach(sortOptions, id: \.self) { opt in
+                                Button {
+                                    withAnimation { sortOption = opt }
+                                } label: {
+                                    Text(opt)
+                                        .font(MenuLoTheme.Fonts.caption)
+                                        .fontWeight(sortOption == opt ? .semibold : .regular)
+                                        .foregroundColor(sortOption == opt ? .white : MenuLoTheme.Colors.textSecondary)
+                                        .padding(.horizontal, MenuLoTheme.Spacing.md)
+                                        .padding(.vertical, 6)
+                                        .background(sortOption == opt ? MenuLoTheme.Colors.primary : MenuLoTheme.Colors.cardBackground)
+                                        .cornerRadius(MenuLoTheme.CornerRadius.pill)
+                                        .overlay(
+                                            Capsule()
+                                                .strokeBorder(
+                                                    sortOption == opt ? Color.clear : MenuLoTheme.Colors.divider,
+                                                    lineWidth: 1
+                                                )
+                                        )
+                                }
                             }
                         }
+                        .padding(.horizontal, MenuLoTheme.Spacing.lg)
+                        .padding(.vertical, MenuLoTheme.Spacing.sm)
                     }
-                    .padding(.horizontal, MenuLoTheme.Spacing.lg)
-                    .padding(.bottom, MenuLoTheme.Spacing.sm)
-                }
 
-                Divider()
+                    Divider()
 
-                // MARK: - Liste
-                ScrollView {
-                    LazyVStack(spacing: MenuLoTheme.Spacing.md) {
-                        if selectedSegment == 0 {
+                    // MARK: - Liste
+                    ScrollView {
+                        LazyVStack(spacing: MenuLoTheme.Spacing.md) {
                             ForEach(sortedRestaurants) { r in
                                 FavRestaurantCard(restaurant: r)
                             }
-                        } else {
-                            ForEach(sortedItems) { item in
-                                FavItemRow(item: item)
-                            }
                         }
+                        .padding(.horizontal, MenuLoTheme.Spacing.lg)
+                        .padding(.vertical, MenuLoTheme.Spacing.md)
+                        .padding(.bottom, 90)
                     }
-                    .padding(.horizontal, MenuLoTheme.Spacing.lg)
-                    .padding(.vertical, MenuLoTheme.Spacing.md)
-                    .padding(.bottom, 90)
-                    .animation(.spring(response: 0.35), value: selectedSegment)
+                    .background(MenuLoTheme.Colors.backgroundLight)
                 }
-                .background(MenuLoTheme.Colors.backgroundLight)
             }
             .background(MenuLoTheme.Colors.backgroundLight)
             .navigationTitle("Favorilerim")
             .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {  } label: {
-                        Text("Düzenle")
-                            .font(MenuLoTheme.Fonts.caption)
-                            .foregroundColor(MenuLoTheme.Colors.primary)
-                    }
-                }
+            .onAppear {
+                Task { await viewModel.fetchNearbyRestaurants() }
             }
         }
     }
@@ -216,8 +148,8 @@ private struct FavStatItem: View {
 
 // MARK: - Restoran Kartı
 private struct FavRestaurantCard: View {
-    let restaurant: FavouriteRestaurant
-    @State private var isLiked = true
+    let restaurant: Restaurant
+    @EnvironmentObject var favouritesManager: FavouritesManager
 
     var body: some View {
         HStack(spacing: MenuLoTheme.Spacing.md) {
@@ -227,7 +159,7 @@ private struct FavRestaurantCard: View {
                 RoundedRectangle(cornerRadius: MenuLoTheme.CornerRadius.large)
                     .fill(
                         LinearGradient(
-                            colors: restaurant.gradientColors,
+                            colors: placeholderColors,
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -296,12 +228,14 @@ private struct FavRestaurantCard: View {
             Spacer()
 
             Button {
-                withAnimation(.spring(response: 0.3)) { isLiked.toggle() }
+                withAnimation(.spring(response: 0.3)) { 
+                    favouritesManager.toggleFavorite(restaurantID: restaurant.id) 
+                }
             } label: {
-                Image(systemName: isLiked ? "heart.fill" : "heart")
-                    .foregroundColor(isLiked ? .red : MenuLoTheme.Colors.textSecondary)
+                Image(systemName: favouritesManager.isFavorite(restaurantID: restaurant.id) ? "heart.fill" : "heart")
+                    .foregroundColor(favouritesManager.isFavorite(restaurantID: restaurant.id) ? .red : MenuLoTheme.Colors.textSecondary)
                     .font(.title3)
-                    .scaleEffect(isLiked ? 1.15 : 1.0)
+                    .scaleEffect(favouritesManager.isFavorite(restaurantID: restaurant.id) ? 1.15 : 1.0)
             }
         }
         .padding(MenuLoTheme.Spacing.md)
@@ -309,74 +243,23 @@ private struct FavRestaurantCard: View {
         .cornerRadius(MenuLoTheme.CornerRadius.large)
         .shadow(color: .black.opacity(0.07), radius: 10, x: 0, y: 4)
     }
-}
 
-// MARK: - Ürün Satırı
-private struct FavItemRow: View {
-    let item: FavouriteItem
-    @State private var isLiked = true
-
-    var body: some View {
-        HStack(spacing: MenuLoTheme.Spacing.md) {
-            ZStack {
-                RoundedRectangle(cornerRadius: MenuLoTheme.CornerRadius.medium)
-                    .fill(item.isGreenMenu
-                        ? MenuLoTheme.Colors.success.opacity(0.15)
-                        : MenuLoTheme.Colors.primary.opacity(0.1))
-                    .frame(width: 56, height: 56)
-                Text(item.emoji)
-                    .font(.system(size: 28))
-            }
-
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 5) {
-                    Text(item.name)
-                        .font(MenuLoTheme.Fonts.body)
-                        .fontWeight(.semibold)
-                        .foregroundColor(MenuLoTheme.Colors.textPrimary)
-                        .lineLimit(1)
-                    if item.isGreenMenu {
-                        Label("Yeşil", systemImage: "leaf.fill")
-                            .font(.caption2)
-                            .fontWeight(.semibold)
-                            .foregroundColor(MenuLoTheme.Colors.success)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background(MenuLoTheme.Colors.success.opacity(0.12))
-                            .clipShape(Capsule())
-                    }
-                }
-                Text(item.restaurantName)
-                    .font(MenuLoTheme.Fonts.caption)
-                    .foregroundColor(MenuLoTheme.Colors.textSecondary)
-                    .lineLimit(1)
-            }
-
-            Spacer()
-
-            VStack(alignment: .trailing, spacing: 5) {
-                Text("₺\(Int(item.price))")
-                    .font(MenuLoTheme.Fonts.button)
-                    .fontWeight(.bold)
-                    .foregroundColor(MenuLoTheme.Colors.primary)
-
-                Button {
-                    withAnimation(.spring(response: 0.3)) { isLiked.toggle() }
-                } label: {
-                    Image(systemName: isLiked ? "heart.fill" : "heart")
-                        .foregroundColor(isLiked ? .red : MenuLoTheme.Colors.textSecondary)
-                        .scaleEffect(isLiked ? 1.15 : 1.0)
-                }
-            }
-        }
-        .padding(MenuLoTheme.Spacing.md)
-        .background(MenuLoTheme.Colors.cardBackground)
-        .cornerRadius(MenuLoTheme.CornerRadius.large)
-        .shadow(color: .black.opacity(0.05), radius: 6, x: 0, y: 2)
+    private var placeholderColors: [Color] {
+        let palettes: [[Color]] = [
+            [Color(hex: "#FF6B6B"), Color(hex: "#FFA63B")],
+            [Color(hex: "#6C5CE7"), Color(hex: "#A29BFE")],
+            [Color(hex: "#00B894"), Color(hex: "#55EFC4")],
+            [Color(hex: "#0984E3"), Color(hex: "#74B9FF")],
+            [Color(hex: "#E17055"), Color(hex: "#FAB1A0")],
+            [Color(hex: "#FDCB6E"), Color(hex: "#E0752A")]
+        ]
+        let idx = abs(restaurant.name.hashValue) % palettes.count
+        return palettes[idx]
     }
 }
 
 // MARK: - Preview
 #Preview {
     FavouritesView()
+        .environmentObject(FavouritesManager())
 }

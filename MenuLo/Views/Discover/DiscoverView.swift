@@ -7,23 +7,6 @@
 
 import SwiftUI
 
-// MARK: - Mock Restoran Modeli
-fileprivate struct MockRestaurant: Identifiable {
-    let id = UUID()
-    let name: String
-    let cuisine: String
-    let rating: Double
-    let reviewCount: Int
-    let distance: String
-    let priceRange: String
-    let tags: [String]
-    let emoji: String
-    let isOpen: Bool
-    let deliveryTime: String
-}
-
-
-
 // MARK: - DiscoverView
 struct DiscoverView: View {
 
@@ -36,24 +19,16 @@ struct DiscoverView: View {
 
     let categories = ["Tümü", "🍕 Pizza", "🍔 Burger", "🥗 Vegan", "🍣 Sushi", "🍰 Tatlı", "🍜 Ramen", "🦐 Deniz Ürünleri", "☕️ Kahve"]
 
-    fileprivate let restaurants: [MockRestaurant] = [
-        MockRestaurant(name: "Gusto Pizzeria",      cuisine: "İtalyan",    rating: 4.8, reviewCount: 312, distance: "0.4 km", priceRange: "₺₺",  tags: ["Pizza", "Vegan Option"],      emoji: "🍕", isOpen: true,  deliveryTime: "20–30 dk"),
-        MockRestaurant(name: "Kadıköy Burger House",cuisine: "Amerikan",   rating: 4.7, reviewCount: 198, distance: "0.7 km", priceRange: "₺",    tags: ["Burger", "Pet Friendly"],     emoji: "🍔", isOpen: true,  deliveryTime: "15–25 dk"),
-        MockRestaurant(name: "Green Bowl",          cuisine: "Vegan",      rating: 4.6, reviewCount: 241, distance: "0.9 km", priceRange: "₺₺",  tags: ["Vegan", "Gluten Free"],       emoji: "🥗", isOpen: true,  deliveryTime: "25–35 dk"),
-        MockRestaurant(name: "Ramen House Tokyo",   cuisine: "Japon",      rating: 4.5, reviewCount: 175, distance: "1.1 km", priceRange: "₺₺",  tags: ["Ramen", "Sushi"],             emoji: "🍜", isOpen: false, deliveryTime: "30–40 dk"),
-        MockRestaurant(name: "Pastane 1888",        cuisine: "Pastane",    rating: 4.9, reviewCount: 523, distance: "0.3 km", priceRange: "₺",    tags: ["Tatlı", "Kahve"],             emoji: "🍰", isOpen: true,  deliveryTime: "10–15 dk"),
-        MockRestaurant(name: "Deniz Lokantası",     cuisine: "Türk/Deniz", rating: 4.6, reviewCount: 289, distance: "1.5 km", priceRange: "₺₺₺", tags: ["Seafood", "Halal"],           emoji: "🦐", isOpen: true,  deliveryTime: "35–50 dk"),
-        MockRestaurant(name: "Sushi Boshi",         cuisine: "Japon",      rating: 4.4, reviewCount: 132, distance: "2.0 km", priceRange: "₺₺₺", tags: ["Sushi", "Vegetarian Option"], emoji: "🍣", isOpen: true,  deliveryTime: "40–50 dk"),
-        MockRestaurant(name: "Kahve Durağı",        cuisine: "Kafe",       rating: 4.7, reviewCount: 410, distance: "0.2 km", priceRange: "₺",    tags: ["Kahve", "Tatlı"],             emoji: "☕️", isOpen: true,  deliveryTime: "5–10 dk"),
-    ]
+    @StateObject private var viewModel = DiscoverViewModel()
 
-    fileprivate var filteredRestaurants: [MockRestaurant] {
-        let catFiltered: [MockRestaurant]
+    fileprivate var filteredRestaurants: [Restaurant] {
+        let sourceList = Array(viewModel.restaurants.prefix(10))
+        let catFiltered: [Restaurant]
         if selectedCategory == "Tümü" {
-            catFiltered = restaurants
+            catFiltered = sourceList
         } else {
             let cleanCat = selectedCategory.components(separatedBy: " ").dropFirst().joined(separator: " ")
-            catFiltered = restaurants.filter { $0.tags.contains(where: { $0.contains(cleanCat) }) || $0.cuisine.contains(cleanCat) }
+            catFiltered = sourceList.filter { $0.tags.contains(where: { $0.contains(cleanCat) }) || $0.cuisine.contains(cleanCat) }
         }
         guard !searchText.isEmpty else { return catFiltered }
         return catFiltered.filter {
@@ -135,7 +110,7 @@ struct DiscoverView: View {
                                     Text("Yakınındaki Lezzetler")
                                         .font(MenuLoTheme.Fonts.title)
                                         .foregroundColor(MenuLoTheme.Colors.textPrimary)
-                                    Text("\(restaurants.count) mekan bulundu")
+                                    Text("\(viewModel.restaurants.count) mekan bulundu")
                                         .font(MenuLoTheme.Fonts.caption)
                                         .foregroundColor(MenuLoTheme.Colors.textSecondary)
                                 }
@@ -178,14 +153,17 @@ struct DiscoverView: View {
             .sheet(isPresented: $showFilterSheet) {
                 FilterSheetView()
             }
+            .task {
+                await viewModel.fetchNearbyRestaurants()
+            }
         }
     }
 }
 
 // MARK: - Restoran Kartı
 private struct RestaurantCard: View {
-    let restaurant: MockRestaurant
-    @State private var isFav = false
+    let restaurant: Restaurant
+    @EnvironmentObject var favouritesManager: FavouritesManager
 
     var body: some View {
         VStack(spacing: 0) {
@@ -235,10 +213,12 @@ private struct RestaurantCard: View {
 
                     // Kalp İkonu (Sağ Üst)
                     Button {
-                        withAnimation(.spring(response: 0.3)) { isFav.toggle() }
+                        withAnimation(.spring(response: 0.3)) { 
+                            favouritesManager.toggleFavorite(restaurantID: restaurant.id)
+                        }
                     } label: {
-                        Image(systemName: isFav ? "heart.fill" : "heart")
-                            .foregroundColor(isFav ? .red : .white)
+                        Image(systemName: favouritesManager.isFavorite(restaurantID: restaurant.id) ? "heart.fill" : "heart")
+                            .foregroundColor(favouritesManager.isFavorite(restaurantID: restaurant.id) ? .red : .white)
                             .font(.system(size: 18, weight: .semibold))
                             .shadow(color: .black.opacity(0.3), radius: 4)
                     }

@@ -76,5 +76,12 @@ struct LoginView: View {
             // Klavyenin üstteki içerikleri ezmemesi için ekranı yukarı kaydırır
             .ignoresSafeArea(.keyboard, edges: .bottom)
         }
+        .alert("Giriş Başarısız", isPresented: $authVM.showError) {
+            Button("Tamam", role: .cancel) {
+                authVM.clearError()
+            }
+        } message: {
+            Text(authVM.errorMessage)
+        }
     }
 }

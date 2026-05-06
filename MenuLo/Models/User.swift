@@ -1,23 +1,10 @@
-//
-//  User.swift
-//  MenuLo
-//
-//  Kullanıcı veri modeli.
-//  Backend'den gelen JSON verisini Swift struct'ına dönüştürmek (decode)
-//  ve Swift nesnesini JSON'a çevirmek (encode) için Codable protokolünü kullanır.
-//
-
 import Foundation
 
-/// Kullanıcı tipi — müşteri veya işletme sahibi.
-///
-/// Backend'de "customer" veya "business" string olarak saklanır.
-/// `Codable` sayesinde JSON <-> Swift dönüşümü otomatik yapılır.
+/// Kullanıcı tipi — müşteri veya işletme sahibi. (Geriye dönük uyumluluk için)
 enum UserType: String, Codable, CaseIterable {
     case customer = "customer"
     case business = "business"
     
-    /// Kullanıcı tipinin Türkçe görüntüleme metni
     var displayName: String {
         switch self {
         case .customer: return "Müşteri"
@@ -26,78 +13,58 @@ enum UserType: String, Codable, CaseIterable {
     }
 }
 
-/// Kullanıcı veri modeli.
-///
-/// Bu struct, backend API'den dönen kullanıcı verisini temsil eder.
-/// `Codable` → JSON encode/decode desteği
-/// `Identifiable` → SwiftUI `List` ve `ForEach` içinde doğrudan kullanılabilir
-/// `Equatable` → İki User nesnesinin karşılaştırılabilmesi
-///
-/// Örnek JSON:
-/// ```json
-/// {
-///     "id": 1,
-///     "name": "Gökay",
-///     "email": "gokay@example.com",
-///     "userType": "customer",
-///     "profileImageURL": "https://...",
-///     "createdAt": "2026-05-05T12:00:00Z"
-/// }
-/// ```
-struct User: Codable, Identifiable, Equatable {
+struct User: Codable, Equatable, Identifiable {
+    let userId: Int
+    let username: String
+    let email: String
+    let role: String
     
-    /// Kullanıcının benzersiz kimlik numarası (MySQL primary key)
-    let id: Int
+    var id: Int { userId }
     
-    /// Kullanıcının tam adı
-    var name: String
+    // Projedeki eski kodların (AuthViewModel, ProfileView vb.) bozulmaması için computed property'ler eklendi
+    var name: String { username }
     
-    /// E-posta adresi (giriş için kullanılır)
-    var email: String
+    var userType: UserType {
+        if role.lowercased() == "owner" || role.lowercased() == "admin" || role.lowercased() == "business" {
+            return .business
+        }
+        return .customer
+    }
     
-    /// Kullanıcı tipi: müşteri mi, işletme sahibi mi?
-    var userType: UserType
-    
-    /// Profil fotoğrafı URL'i (opsiyonel)
-    var profileImageURL: String?
-    
-    /// Hesap oluşturma tarihi (opsiyonel — backend'den gelebilir)
-    var createdAt: String?
-    
-    // MARK: - CodingKeys
-    
-    /// JSON anahtar isimleriyle Swift property isimlerini eşleştirir.
-    /// Backend'de snake_case, Swift'te camelCase kullanıldığı durumlar için.
     enum CodingKeys: String, CodingKey {
-        case id
-        case name
-        case email
-        case userType = "user_type"
-        case profileImageURL = "profile_image_url"
-        case createdAt = "created_at"
+        case userId = "user_id"
+        case username, email, role
+    }
+    
+    // Eski User(id:name:email:userType:) kullanımının hata vermemesi için özel Init:
+    init(userId: Int, username: String, email: String, role: String) {
+        self.userId = userId
+        self.username = username
+        self.email = email
+        self.role = role
+    }
+    
+    // Geriye dönük uyumluluk Init:
+    init(id: Int, name: String, email: String, userType: UserType) {
+        self.userId = id
+        self.username = name
+        self.email = email
+        self.role = userType == .business ? "Owner" : "Customer"
     }
 }
 
-// MARK: - Preview / Test için Örnek Veri
-
 extension User {
-    /// SwiftUI Preview ve testlerde kullanılacak örnek kullanıcı
     static let example = User(
-        id: 1,
-        name: "Gökay",
+        userId: 1,
+        username: "Gökay",
         email: "gokay@menulo.com",
-        userType: .customer,
-        profileImageURL: nil,
-        createdAt: "2026-05-05T12:00:00Z"
+        role: "Customer"
     )
     
-    /// İşletme sahibi örneği
     static let businessExample = User(
-        id: 2,
-        name: "Lezzet Durağı",
+        userId: 2,
+        username: "Lezzet Durağı",
         email: "info@lezzetduragi.com",
-        userType: .business,
-        profileImageURL: nil,
-        createdAt: "2026-05-05T12:00:00Z"
+        role: "Owner"
     )
 }

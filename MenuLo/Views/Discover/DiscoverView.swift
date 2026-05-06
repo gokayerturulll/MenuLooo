@@ -19,7 +19,7 @@ struct DiscoverView: View {
 
     let categories = ["Tümü", "🍕 Pizza", "🍔 Burger", "🥗 Vegan", "🍣 Sushi", "🍰 Tatlı", "🍜 Ramen", "🦐 Deniz Ürünleri", "☕️ Kahve"]
 
-    @StateObject private var viewModel = DiscoverViewModel()
+    @EnvironmentObject var viewModel: DiscoverViewModel
 
     fileprivate var filteredRestaurants: [Restaurant] {
         let sourceList = Array(viewModel.restaurants.prefix(10))
@@ -149,15 +149,15 @@ struct DiscoverView: View {
                     .padding(.bottom, 90) // FAB için boşluk
                 }
                 .background(MenuLoTheme.Colors.backgroundLight)
+                .refreshable {
+                    await viewModel.refresh()
+                }
             }
             .background(MenuLoTheme.Colors.backgroundLight)
             .navigationTitle("Keşfet")
             .navigationBarTitleDisplayMode(.large)
             .sheet(isPresented: $showFilterSheet) {
                 FilterSheetView()
-            }
-            .task {
-                await viewModel.fetchNearbyRestaurants()
             }
         }
     }
@@ -488,5 +488,7 @@ private struct FilterSection<Content: View>: View {
 // MARK: - Preview
 #Preview {
     DiscoverView()
+        .environmentObject(DiscoverViewModel())
+        .environmentObject(FavouritesManager())
 }
 

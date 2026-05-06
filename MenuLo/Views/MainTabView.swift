@@ -24,8 +24,8 @@ struct MainTabView: View {
                     .tabItem { Label("Keşfet", systemImage: selectedTab == 0 ? "magnifyingglass.circle.fill" : "magnifyingglass") }
                     .tag(0)
 
-                // Tab 1: Harita
-                NavigationStack { MapView() }   // Harita tab'ı — DiscoverView harita odaklı
+                // Tab 1: Harita — MapView kendi NavigationStack(path:)'ini yönetiyor
+                MapView()
                     .tabItem { Label("Harita", systemImage: selectedTab == 1 ? "map.fill" : "map") }
                     .tag(1)
 

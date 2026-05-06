@@ -10,6 +10,7 @@
 
 import Foundation
 import CoreLocation
+import Combine
 
 @MainActor
 class DiscoverViewModel: ObservableObject {
@@ -23,10 +24,24 @@ class DiscoverViewModel: ObservableObject {
     // API isteği yapılırken ekranda bir yüklenme ikonu göstermek için
     @Published var isLoading = false
     
+    private var cancellables = Set<AnyCancellable>()
+    
     init() {
-        // ViewModel ilk yaratıldığında otomatik olarak konum izni isteyip
-        // takibi başlatabiliriz.
         locationManager.requestPermission()
+        setupLocationSubscription()
+    }
+    
+    private func setupLocationSubscription() {
+        // Kullanıcı konumu her güncellendiğinde restoranları otomatik olarak çekiyoruz
+        locationManager.$userLocation
+            .compactMap { $0 }
+            .debounce(for: .seconds(1.5), scheduler: RunLoop.main) // API spamını engellemek için debounce
+            .sink { [weak self] _ in
+                Task {
+                    await self?.fetchNearbyRestaurants()
+                }
+            }
+            .store(in: &cancellables)
     }
     
     /// Kullanıcının mevcut konumunu LocationManager üzerinden dışarıya verir
@@ -36,12 +51,6 @@ class DiscoverViewModel: ObservableObject {
     
     /// Backend'den (Node.js) kullanıcının konumuna göre restoranları çeker
     func fetchNearbyRestaurants() async {
-        // Konum yoksa arama yapamayız
-        guard userLocation != nil else {
-            print("Konum henüz alınamadı.")
-            return
-        }
-        
         isLoading = true
         
         // Gerçek backend API'sinden restoranları çekiyoruz

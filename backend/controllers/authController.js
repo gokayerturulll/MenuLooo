@@ -49,7 +49,7 @@ exports.login = async (req, res) => {
         // Kullanıcıyı bul
         const result = await pool.query('SELECT * FROM "user" WHERE email = $1', [email]);
         if (result.rows.length === 0) {
-            return res.status(404).json({ success: false, message: 'Kullanıcı bulunamadı.' });
+            return res.status(401).json({ success: false, message: 'E-posta veya şifre hatalı.' });
         }
         
         const user = result.rows[0];
@@ -63,7 +63,7 @@ exports.login = async (req, res) => {
         }
         
         if (!isMatch) {
-            return res.status(401).json({ success: false, message: 'Hatalı şifre girdiniz.' });
+            return res.status(401).json({ success: false, message: 'E-posta veya şifre hatalı.' });
         }
         
         // JWT Oluştur

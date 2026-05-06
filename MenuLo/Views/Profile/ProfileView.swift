@@ -439,7 +439,10 @@ private struct ProfileRow: View {
 }
 
 #Preview("İşletme") {
-    let vm = AuthViewModel()
-    vm.currentUser = User.businessExample
-    return ProfileView().environmentObject(vm)
+    ProfileView()
+        .environmentObject({
+            let vm = AuthViewModel()
+            vm.currentUser = User.businessExample
+            return vm
+        }())
 }

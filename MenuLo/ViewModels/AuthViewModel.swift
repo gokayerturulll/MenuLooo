@@ -71,14 +71,25 @@ class AuthViewModel: ObservableObject {
         
         isLoading = true
         
-        // TODO: Gerçek API çağrısı (Aşama 2'de NetworkService ile)
-        // Şimdilik sahte giriş simülasyonu:
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            guard let self = self else { return }
-            
-            // Demo kullanıcı ile giriş
-            self.currentUser = User.example
-            self.isAuthenticated = true
+        // Gerçek API çağrısı
+        Task {
+            do {
+                let response = try await NetworkManager.shared.login(email: email, password: password)
+                if response.success, let user = response.user {
+                    // Token'ı AppStorage'a NetworkManager içinde kaydettirebiliriz veya burada UserDefaults ile yapabiliriz.
+                    // NetworkManager'da @AppStorage("authToken") kullanıldığı için orada SwiftUI tarafında state güncellenecektir.
+                    UserDefaults.standard.set(response.token, forKey: "authToken")
+                    
+                    self.currentUser = user
+                    self.isAuthenticated = true
+                } else {
+                    self.errorMessage = response.message ?? "Giriş başarısız."
+                    self.showError = true
+                }
+            } catch {
+                self.errorMessage = "Sunucu hatası: \(error.localizedDescription)"
+                self.showError = true
+            }
             self.isLoading = false
         }
     }
@@ -101,17 +112,31 @@ class AuthViewModel: ObservableObject {
         
         isLoading = true
         
-        // TODO: Gerçek API çağrısı (Aşama 2'de)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            guard let self = self else { return }
-            
-            self.currentUser = User(
-                id: Int.random(in: 100...999),
-                name: name,
-                email: email,
-                userType: userType
-            )
-            self.isAuthenticated = true
+        let role = userType == .business ? "Owner" : "Customer"
+        
+        Task {
+            do {
+                let response = try await NetworkManager.shared.register(name: name, email: email, password: password, role: role)
+                
+                if response.success {
+                    // Kayıt başarılı, arka planda hemen login yapalım:
+                    let loginResp = try await NetworkManager.shared.login(email: email, password: password)
+                    if loginResp.success, let user = loginResp.user {
+                        UserDefaults.standard.set(loginResp.token, forKey: "authToken")
+                        self.currentUser = user
+                        self.isAuthenticated = true
+                    } else {
+                        self.errorMessage = "Kayıt başarılı ancak giriş yapılamadı. Lütfen giriş sayfasına dönün."
+                        self.showError = true
+                    }
+                } else {
+                    self.errorMessage = response.message ?? "Kayıt işlemi başarısız."
+                    self.showError = true
+                }
+            } catch {
+                self.errorMessage = "Sunucu hatası: \(error.localizedDescription)"
+                self.showError = true
+            }
             self.isLoading = false
         }
     }

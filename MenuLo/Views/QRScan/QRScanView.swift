@@ -4,209 +4,207 @@
 //
 //  MenuLo/Views/QRScan/QRScanView.swift
 //
-//  QR Kod tarama sekmesi — Masadaki QR'ı okuyarak menüye anında erişim.
-//  Gerçek AVFoundation entegrasyonu için bir sonraki aşamada kamera bağlanacak.
+//  Grup Karar Odası için QR kod okuma ve gösterme ekranı.
 //
 
 import SwiftUI
 
 struct QRScanView: View {
-
-    @State private var isScanning = false
-    @State private var scannedCode: String? = nil
-    @State private var showResult  = false
+    @StateObject private var cameraManager = CameraManager()
+    @State private var selectedTab = 0 // 0: QR Okut, 1: QR Göster
     @State private var scanProgress: CGFloat = 0
 
     var body: some View {
         NavigationStack {
             ZStack {
-                // MARK: - Kamera Arka Planı (Mock)
-                if isScanning {
-                    ScannerPreviewMock()
-                        .ignoresSafeArea()
-                } else {
-                    MenuLoTheme.Colors.backgroundLight
-                        .ignoresSafeArea()
-                }
+                MenuLoTheme.Colors.backgroundLight
+                    .ignoresSafeArea()
 
-                // MARK: - İçerik
-                VStack(spacing: MenuLoTheme.Spacing.lg) {
-
-                    if isScanning {
-                        // --- Tarama Arayüzü ---
-                        Spacer()
-
-                        // Kamera Çerçevesi
-                        ZStack {
-                            // Arka plan bulanıklık
-                            RoundedRectangle(cornerRadius: MenuLoTheme.CornerRadius.large)
-                                .stroke(.white.opacity(0.5), lineWidth: 2)
-                                .frame(width: 260, height: 260)
-
-                            // Köşe işaretleri
-                            QRCorners(size: 260)
-
-                            // Tarama çizgisi animasyonu
-                            Rectangle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            MenuLoTheme.Colors.primary.opacity(0),
-                                            MenuLoTheme.Colors.primary,
-                                            MenuLoTheme.Colors.primary.opacity(0)
-                                        ],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .frame(width: 240, height: 2)
-                                .offset(y: -100 + (200 * scanProgress))
-                                .animation(
-                                    .linear(duration: 1.5).repeatForever(autoreverses: true),
-                                    value: scanProgress
-                                )
+                VStack(spacing: 0) {
+                    // MARK: - Segmented Control
+                    Picker("İşlem", selection: $selectedTab) {
+                        Text("QR Okut").tag(0)
+                        Text("QR Göster").tag(1)
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal, MenuLoTheme.Spacing.lg)
+                    .padding(.top, MenuLoTheme.Spacing.md)
+                    .padding(.bottom, MenuLoTheme.Spacing.lg)
+                    .onChange(of: selectedTab) { newValue in
+                        if newValue == 0 {
+                            cameraManager.startSession()
+                        } else {
+                            cameraManager.stopSession()
                         }
-                        .frame(width: 260, height: 260)
-                        .onAppear {
-                            scanProgress = 1.0
-                            // Simüle: 3 sn sonra QR bulundu
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                                scannedCode = "menulo://menu/restaurant/lezzet-duragi"
-                                withAnimation { showResult = true }
-                                isScanning = false
-                            }
-                        }
+                    }
 
-                        Text("QR Kodu Çerçeve İçine Alın")
-                            .font(MenuLoTheme.Fonts.body)
-                            .foregroundColor(.white)
-                            .padding(.horizontal, MenuLoTheme.Spacing.xl)
-                            .multilineTextAlignment(.center)
-
-                        // İptal
-                        Button {
-                            withAnimation { isScanning = false }
-                        } label: {
-                            Text("İptal")
-                                .font(MenuLoTheme.Fonts.button)
-                                .foregroundColor(.white)
-                                .padding(MenuLoTheme.Spacing.md)
-                                .background(.white.opacity(0.2))
-                                .cornerRadius(MenuLoTheme.CornerRadius.pill)
-                        }
-
-                        Spacer()
-
-                    } else if let code = scannedCode, showResult {
-                        // --- Tarama Sonucu ---
-                        Spacer()
-
-                        VStack(spacing: MenuLoTheme.Spacing.lg) {
-                            ZStack {
-                                Circle()
-                                    .fill(MenuLoTheme.Colors.success.opacity(0.12))
-                                    .frame(width: 96, height: 96)
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 56))
-                                    .foregroundColor(MenuLoTheme.Colors.success)
-                            }
-                            .scaleEffect(showResult ? 1 : 0.5)
-                            .animation(.spring(response: 0.4), value: showResult)
-
-                            Text("QR Kod Okundu!")
-                                .font(MenuLoTheme.Fonts.title)
-                                .foregroundColor(MenuLoTheme.Colors.textPrimary)
-
-                            Text("Lezzet Durağı Menüsü")
-                                .font(MenuLoTheme.Fonts.subtitle)
-                                .foregroundColor(MenuLoTheme.Colors.primary)
-
-                            VStack(spacing: 4) {
-                                Text("Masa #7 — Kadıköy Şubesi")
-                                    .font(MenuLoTheme.Fonts.body)
-                                    .foregroundColor(MenuLoTheme.Colors.textSecondary)
-                                Text(code)
-                                    .font(.system(size: 11, design: .monospaced))
-                                    .foregroundColor(MenuLoTheme.Colors.textSecondary.opacity(0.6))
-                            }
-
-                            PrimaryButton(title: "Menüyü Görüntüle") {
-                                // Menü ekranına git
-                            }
-                            .padding(.horizontal, MenuLoTheme.Spacing.lg)
-
-                            Button {
-                                withAnimation {
-                                    scannedCode = nil
-                                    showResult = false
-                                }
-                            } label: {
-                                Text("Tekrar Tara")
-                                    .font(MenuLoTheme.Fonts.body)
-                                    .foregroundColor(MenuLoTheme.Colors.primary)
-                            }
-                        }
-                        .padding(MenuLoTheme.Spacing.lg)
-                        .background(MenuLoTheme.Colors.cardBackground)
-                        .cornerRadius(MenuLoTheme.CornerRadius.large)
-                        .shadow(color: .black.opacity(0.08), radius: 16, x: 0, y: 4)
-                        .padding(.horizontal, MenuLoTheme.Spacing.lg)
-
-                        Spacer()
-
+                    if selectedTab == 0 {
+                        // MARK: - QR Okut (Odaya Katıl)
+                        qrScanTab()
                     } else {
-                        // --- Başlangıç Ekranı ---
-                        Spacer()
-
-                        VStack(spacing: MenuLoTheme.Spacing.lg) {
-
-                            // Animasyonlu İkon
-                            ZStack {
-                                Circle()
-                                    .fill(MenuLoTheme.Colors.primary.opacity(0.1))
-                                    .frame(width: 120, height: 120)
-
-                                Circle()
-                                    .stroke(MenuLoTheme.Colors.primary.opacity(0.3), lineWidth: 2)
-                                    .frame(width: 140, height: 140)
-
-                                Image(systemName: "qrcode")
-                                    .font(.system(size: 56))
-                                    .foregroundColor(MenuLoTheme.Colors.primary)
-                            }
-
-                            VStack(spacing: MenuLoTheme.Spacing.sm) {
-                                Text("QR Menü Erişimi")
-                                    .font(MenuLoTheme.Fonts.largeTitle)
-                                    .foregroundColor(MenuLoTheme.Colors.textPrimary)
-
-                                Text("Masanızdaki QR kodu okutarak\nmenüye saniyeler içinde erişin.")
-                                    .font(MenuLoTheme.Fonts.body)
-                                    .foregroundColor(MenuLoTheme.Colors.textSecondary)
-                                    .multilineTextAlignment(.center)
-                                    .lineSpacing(4)
-                            }
-
-                            // Özellik Kartları
-                            HStack(spacing: MenuLoTheme.Spacing.md) {
-                                FeatureCard(icon: "bolt.fill", color: MenuLoTheme.Colors.primary, label: "Hızlı Erişim")
-                                FeatureCard(icon: "hand.point.up.left.fill", color: MenuLoTheme.Colors.success, label: "Kolay Sipariş")
-                                FeatureCard(icon: "leaf.fill", color: Color(hex: "#00B894"), label: "Yeşil Menü")
-                            }
-                            .padding(.horizontal, MenuLoTheme.Spacing.lg)
-
-                            PrimaryButton(title: "Kamerayı Başlat") {
-                                withAnimation { isScanning = true }
-                            }
-                            .padding(.horizontal, MenuLoTheme.Spacing.lg)
-                        }
-
-                        Spacer()
+                        // MARK: - QR Göster (Oda Kur)
+                        qrShowTab()
                     }
                 }
             }
-            .navigationTitle(isScanning ? "" : "QR Scan")
+            .navigationTitle("Grup Karar Odası")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                cameraManager.requestPermission()
+                // Kamera setup için biraz bekleyelim ki izin popup'ı geçebilsin
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    if cameraManager.permissionGranted {
+                        cameraManager.setupCamera()
+                        if selectedTab == 0 {
+                            cameraManager.startSession()
+                        }
+                    }
+                }
+            }
+            .onDisappear {
+                cameraManager.stopSession()
+            }
+        }
+    }
+
+    // MARK: - Tab: QR Okut
+    @ViewBuilder
+    private func qrScanTab() -> some View {
+        VStack {
+            ZStack {
+                // Kamera Görüntüsü
+                if cameraManager.permissionGranted {
+                    CameraPreviewView(cameraManager: cameraManager)
+                        .cornerRadius(MenuLoTheme.CornerRadius.large)
+                        .clipped()
+                } else {
+                    Rectangle()
+                        .fill(Color.black.opacity(0.8))
+                        .cornerRadius(MenuLoTheme.CornerRadius.large)
+                        .overlay(
+                            Text("Kamera izni gerekiyor")
+                                .foregroundColor(.white)
+                                .font(MenuLoTheme.Fonts.body)
+                        )
+                }
+
+                // QR Tarama Çerçevesi
+                ZStack {
+                    RoundedRectangle(cornerRadius: MenuLoTheme.CornerRadius.large)
+                        .stroke(.white.opacity(0.5), lineWidth: 2)
+                        .frame(width: 260, height: 260)
+
+                    QRCorners(size: 260)
+
+                    // Tarama Çizgisi Animasyonu
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    MenuLoTheme.Colors.primary.opacity(0),
+                                    MenuLoTheme.Colors.primary,
+                                    MenuLoTheme.Colors.primary.opacity(0)
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: 240, height: 2)
+                        .offset(y: -100 + (200 * scanProgress))
+                        .onAppear {
+                            withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: true)) {
+                                scanProgress = 1.0
+                            }
+                        }
+                }
+                
+                // Başarılı Tarama Durumu (Demo)
+                if let code = cameraManager.scannedCode {
+                    VStack {
+                        Spacer()
+                        VStack(spacing: 8) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(MenuLoTheme.Colors.success)
+                                .font(.system(size: 40))
+                            Text("QR Okundu: \(code.prefix(10))...")
+                                .font(MenuLoTheme.Fonts.caption)
+                                .foregroundColor(MenuLoTheme.Colors.textPrimary)
+                            Button("Tekrar Dene") {
+                                cameraManager.scannedCode = nil
+                                cameraManager.startSession()
+                            }
+                            .foregroundColor(MenuLoTheme.Colors.primary)
+                            .font(MenuLoTheme.Fonts.button)
+                            .padding(.top, 4)
+                        }
+                        .padding()
+                        .background(MenuLoTheme.Colors.cardBackground)
+                        .cornerRadius(MenuLoTheme.CornerRadius.medium)
+                        .shadow(radius: 10)
+                        .padding(.bottom, 20)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal, MenuLoTheme.Spacing.lg)
+
+            Text("Arkadaşının odasına katılmak için QR'ı okut")
+                .font(MenuLoTheme.Fonts.body)
+                .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.vertical, MenuLoTheme.Spacing.xl)
+                .padding(.horizontal, MenuLoTheme.Spacing.lg)
+        }
+    }
+
+    // MARK: - Tab: QR Göster
+    @ViewBuilder
+    private func qrShowTab() -> some View {
+        VStack(spacing: MenuLoTheme.Spacing.xl) {
+            
+            Spacer()
+            
+            Text("Oda Kuruldu 🎉")
+                .font(MenuLoTheme.Fonts.title)
+                .foregroundColor(MenuLoTheme.Colors.textPrimary)
+            
+            // Mock QR Kod
+            ZStack {
+                RoundedRectangle(cornerRadius: MenuLoTheme.CornerRadius.large)
+                    .fill(Color.white)
+                    .frame(width: 280, height: 280)
+                    .shadow(color: .black.opacity(0.1), radius: 15, x: 0, y: 5)
+                
+                Image(systemName: "qrcode")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 200, height: 200)
+                    .foregroundColor(.black)
+                
+                // Logo ortada
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: 48, height: 48)
+                Image(systemName: "fork.knife.circle.fill")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 40, height: 40)
+                    .foregroundColor(MenuLoTheme.Colors.primary)
+            }
+            
+            Text("Arkadaşların odaya katılmak için bu kodu okutabilir")
+                .font(MenuLoTheme.Fonts.body)
+                .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, MenuLoTheme.Spacing.xl)
+            
+            Spacer()
+            
+            PrimaryButton(title: "Odayı Başlat") {
+                // Odayı başlatma aksiyonu
+            }
+            .padding(.horizontal, MenuLoTheme.Spacing.lg)
+            .padding(.bottom, MenuLoTheme.Spacing.xl)
         }
     }
 }
@@ -254,51 +252,6 @@ private struct CornerShape: Shape {
         default: break
         }
         return path
-    }
-}
-
-// MARK: - Kamera Mock Önizleme
-private struct ScannerPreviewMock: View {
-    var body: some View {
-        ZStack {
-            Color.black.opacity(0.85)
-            // Sahte kamera noktaları
-            VStack(spacing: 40) {
-                ForEach(0..<6, id: \.self) { _ in
-                    HStack(spacing: 40) {
-                        ForEach(0..<8, id: \.self) { _ in
-                            Circle()
-                                .fill(Color.white.opacity(Double.random(in: 0.02...0.08)))
-                                .frame(width: CGFloat.random(in: 2...4), height: CGFloat.random(in: 2...4))
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Özellik Kartı
-private struct FeatureCard: View {
-    let icon: String
-    let color: Color
-    let label: String
-
-    var body: some View {
-        VStack(spacing: 6) {
-            Image(systemName: icon)
-                .foregroundColor(color)
-                .font(.title3)
-            Text(label)
-                .font(.caption2)
-                .foregroundColor(MenuLoTheme.Colors.textSecondary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(MenuLoTheme.Spacing.md)
-        .background(MenuLoTheme.Colors.cardBackground)
-        .cornerRadius(MenuLoTheme.CornerRadius.large)
-        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
     }
 }
 

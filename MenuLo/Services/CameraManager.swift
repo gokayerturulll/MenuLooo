@@ -7,52 +7,114 @@
 //  QR Kod okuma işlemleri için cihaz kamerasını (AVFoundation) yöneten servis.
 //
 
-import Foundation
+import SwiftUI
 import AVFoundation
 
-class CameraManager: NSObject, ObservableObject {
-    // Kameraya erişim izninin durumunu tutar
+class CameraManager: NSObject, ObservableObject, AVCaptureMetadataOutputObjectsDelegate {
     @Published var permissionGranted = false
+    @Published var scannedCode: String?
     
-    // Kamera video akışını yakalayan ana oturum nesnesi
     let captureSession = AVCaptureSession()
+    private var isSessionSetup = false
     
-    /// Kamera için kullanıcıdan izin ister
     func requestPermission() {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
-            // İzin zaten verilmiş
-            self.permissionGranted = true
+            DispatchQueue.main.async { self.permissionGranted = true }
         case .notDetermined:
-            // Henüz izin sorulmamış, sor
             AVCaptureDevice.requestAccess(for: .video) { granted in
-                DispatchQueue.main.async {
-                    self.permissionGranted = granted
-                }
+                DispatchQueue.main.async { self.permissionGranted = granted }
             }
         default:
-            // İzin reddedilmiş veya kısıtlanmış
-            self.permissionGranted = false
+            DispatchQueue.main.async { self.permissionGranted = false }
         }
     }
     
-    /// QR okumak için kamerayı ve captureSession'ı ayarlar
     func setupCamera() {
-        guard permissionGranted else { return }
+        guard permissionGranted, !isSessionSetup else { return }
         
-        // Cihazın arka kamerasını bul
         guard let videoCaptureDevice = AVCaptureDevice.default(for: .video) else { return }
+        let videoInput: AVCaptureDeviceInput
         
         do {
-            let videoInput = try AVCaptureDeviceInput(device: videoCaptureDevice)
-            if captureSession.canAddInput(videoInput) {
-                captureSession.addInput(videoInput)
-            }
-            
-            // Metadata (QR kod) okuma ayarları burada eklenebilir.
-            
+            videoInput = try AVCaptureDeviceInput(device: videoCaptureDevice)
         } catch {
-            print("Kamera kurulum hatası: \(error.localizedDescription)")
+            print("Kamera input hatası: \(error)")
+            return
+        }
+        
+        if captureSession.canAddInput(videoInput) {
+            captureSession.addInput(videoInput)
+        } else {
+            return
+        }
+        
+        let metadataOutput = AVCaptureMetadataOutput()
+        
+        if captureSession.canAddOutput(metadataOutput) {
+            captureSession.addOutput(metadataOutput)
+            
+            metadataOutput.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
+            metadataOutput.metadataObjectTypes = [.qr]
+        } else {
+            return
+        }
+        
+        isSessionSetup = true
+    }
+    
+    func startSession() {
+        if !captureSession.isRunning && isSessionSetup {
+            DispatchQueue.global(qos: .background).async {
+                self.captureSession.startRunning()
+            }
+        }
+    }
+    
+    func stopSession() {
+        if captureSession.isRunning {
+            captureSession.stopRunning()
+        }
+    }
+    
+    func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {
+        if let metadataObject = metadataObjects.first {
+            guard let readableObject = metadataObject as? AVMetadataMachineReadableCodeObject else { return }
+            guard let stringValue = readableObject.stringValue else { return }
+            
+            DispatchQueue.main.async {
+                self.scannedCode = stringValue
+                self.stopSession()
+            }
+        }
+    }
+}
+
+// MARK: - SwiftUI Preview View for Camera
+struct CameraPreviewView: UIViewRepresentable {
+    @ObservedObject var cameraManager: CameraManager
+    
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView(frame: UIScreen.main.bounds)
+        
+        let previewLayer = AVCaptureVideoPreviewLayer(session: cameraManager.captureSession)
+        previewLayer.frame = view.bounds
+        previewLayer.videoGravity = .resizeAspectFill
+        
+        // Bu layer, view boyutu değiştikçe kendi boyutunu güncellemeli
+        view.layer.addSublayer(previewLayer)
+        
+        // Ekran boyutlarına dinamik tepki vermek için
+        DispatchQueue.main.async {
+            previewLayer.frame = view.bounds
+        }
+        
+        return view
+    }
+    
+    func updateUIView(_ uiView: UIView, context: Context) {
+        if let previewLayer = uiView.layer.sublayers?.first as? AVCaptureVideoPreviewLayer {
+            previewLayer.frame = uiView.bounds
         }
     }
 }

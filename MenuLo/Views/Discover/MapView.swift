@@ -302,63 +302,85 @@ private struct RestaurantMapPin: View {
     }
 }
 
-// MARK: - Restaurant Half Sheet
+// MARK: - Restaurant Half Sheet (Glassmorphism)
 private struct RestaurantHalfSheetView: View {
     let restaurant: Restaurant
     let onMenuTap: () -> Void
-    @Environment(\.dismiss) private var dismiss
-    
+
     var body: some View {
-        VStack(spacing: MenuLoTheme.Spacing.md) {
-            HStack(spacing: MenuLoTheme.Spacing.md) {
+        VStack(spacing: 14) {
+
+            // Header — emoji avatar + ad + meta
+            HStack(spacing: 14) {
                 Text(restaurant.emoji)
-                    .font(.system(size: 44))
-                    .padding(8)
-                    .background(MenuLoTheme.Colors.primary.opacity(0.1))
-                    .clipShape(Circle())
-                
-                VStack(alignment: .leading, spacing: 4) {
+                    .font(.system(size: 36))
+                    .frame(width: 60, height: 60)
+                    .background(
+                        Circle()
+                            .fill(MenuLoTheme.Colors.primary.opacity(0.18))
+                    )
+                    .overlay(
+                        Circle()
+                            .strokeBorder(MenuLoTheme.Colors.primary.opacity(0.3), lineWidth: 1)
+                    )
+
+                VStack(alignment: .leading, spacing: 5) {
                     Text(restaurant.businessName)
-                        .font(MenuLoTheme.Fonts.title)
+                        .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(MenuLoTheme.Colors.textPrimary)
-                    
-                    HStack(spacing: 4) {
-                        Image(systemName: "star.fill")
-                            .font(.caption2)
-                            .foregroundColor(.yellow)
-                        Text(String(format: "%.1f", restaurant.rating))
-                            .font(MenuLoTheme.Fonts.caption)
-                            .fontWeight(.semibold)
-                            .foregroundColor(MenuLoTheme.Colors.textPrimary)
-                        Text("•")
-                            .font(MenuLoTheme.Fonts.caption)
+                        .lineLimit(1)
+
+                    HStack(spacing: 6) {
+                        HStack(spacing: 3) {
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 11))
+                                .foregroundColor(.yellow)
+                            Text(String(format: "%.1f", restaurant.rating))
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(MenuLoTheme.Colors.textPrimary)
+                        }
+
+                        Text("·")
+                            .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(MenuLoTheme.Colors.textSecondary)
+
                         Text(restaurant.cuisine)
-                            .font(MenuLoTheme.Fonts.caption)
+                            .font(.system(size: 13))
                             .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                            .lineLimit(1)
                     }
                 }
+
                 Spacer()
             }
-            .padding(.horizontal)
-            
-            Button {
-                onMenuTap()
-            } label: {
-                Text("Menüyü Gör")
-                    .font(MenuLoTheme.Fonts.button)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(MenuLoTheme.Colors.primary)
-                    .cornerRadius(MenuLoTheme.CornerRadius.medium)
-                    .shadow(color: MenuLoTheme.Colors.primary.opacity(0.3), radius: 6, x: 0, y: 3)
+
+            // Action — Menüyü Gör (kompakt + gradient)
+            Button(action: onMenuTap) {
+                HStack(spacing: 8) {
+                    Text("Menüyü Gör")
+                        .font(.system(size: 16, weight: .semibold))
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 13)
+                .background(
+                    LinearGradient(
+                        colors: [MenuLoTheme.Colors.primary, Color(hex: "#FF6B35")],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .shadow(color: MenuLoTheme.Colors.primary.opacity(0.35), radius: 10, x: 0, y: 4)
             }
-            .padding(.horizontal)
-            .padding(.bottom)
         }
-        .padding(.top)
-        .background(MenuLoTheme.Colors.backgroundLight.ignoresSafeArea())
+        .padding(.horizontal, 18)
+        .padding(.top, 18)
+        .padding(.bottom, 22)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(.ultraThinMaterial)
     }
 }
 

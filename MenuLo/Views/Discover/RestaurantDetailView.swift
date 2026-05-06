@@ -2,15 +2,15 @@ import SwiftUI
 
 struct RestaurantDetailView: View {
     let restaurant: Restaurant
-    
+
     @State private var menuData: MenuData? = nil
     @State private var isLoading = true
     @State private var errorMessage: String? = nil
-    
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: MenuLoTheme.Spacing.lg) {
-                
+
                 // MARK: - Header Section
                 VStack(alignment: .leading, spacing: MenuLoTheme.Spacing.xs) {
                     HStack {
@@ -19,26 +19,26 @@ struct RestaurantDetailView: View {
                             .padding(MenuLoTheme.Spacing.sm)
                             .background(MenuLoTheme.Colors.primary.opacity(0.1))
                             .clipShape(Circle())
-                        
+
                         VStack(alignment: .leading, spacing: 4) {
                             Text(restaurant.businessName)
                                 .font(MenuLoTheme.Fonts.title)
-                                .foregroundColor(MenuLoTheme.Colors.textPrimary)
-                            
+                                .foregroundColor(.primary)
+
                             HStack(spacing: 4) {
                                 Image(systemName: "mappin.and.ellipse")
                                     .font(.caption)
                                     .foregroundColor(MenuLoTheme.Colors.primary)
                                 Text(restaurant.address ?? "Adres bilgisi yok")
                                     .font(MenuLoTheme.Fonts.caption)
-                                    .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                                    .foregroundColor(.secondary)
                                     .lineLimit(1)
                             }
                         }
                         Spacer()
                     }
                     .padding(.horizontal)
-                    
+
                     HStack(spacing: MenuLoTheme.Spacing.md) {
                         DetailBadge(iconName: "fork.knife", text: restaurant.cuisine)
                         DetailBadge(iconName: "star.fill", text: String(format: "%.1f", restaurant.rating), iconColor: .yellow)
@@ -46,10 +46,10 @@ struct RestaurantDetailView: View {
                     .padding(.horizontal)
                 }
                 .padding(.top, MenuLoTheme.Spacing.md)
-                
+
                 Divider()
                     .padding(.horizontal)
-                
+
                 // MARK: - Menu Content
                 if isLoading {
                     VStack {
@@ -57,6 +57,7 @@ struct RestaurantDetailView: View {
                         ProgressView("Menü yükleniyor...")
                             .progressViewStyle(CircularProgressViewStyle(tint: MenuLoTheme.Colors.primary))
                             .font(MenuLoTheme.Fonts.body)
+                            .foregroundColor(.secondary)
                         Spacer()
                     }
                     .frame(maxWidth: .infinity, minHeight: 200)
@@ -67,8 +68,8 @@ struct RestaurantDetailView: View {
                             .foregroundColor(.red)
                         Text(error)
                             .font(MenuLoTheme.Fonts.body)
-                            .foregroundColor(MenuLoTheme.Colors.textPrimary)
-                        
+                            .foregroundColor(.primary)
+
                         Button("Tekrar Dene") {
                             Task {
                                 await loadMenu()
@@ -85,9 +86,9 @@ struct RestaurantDetailView: View {
                         VStack(alignment: .leading, spacing: MenuLoTheme.Spacing.sm) {
                             Text(category.categoryName)
                                 .font(MenuLoTheme.Fonts.subtitle)
-                                .foregroundColor(MenuLoTheme.Colors.textPrimary)
+                                .foregroundColor(.primary)
                                 .padding(.horizontal)
-                            
+
                             ForEach(category.items) { item in
                                 MenuDetailItemRow(item: item)
                                     .padding(.horizontal)
@@ -99,24 +100,24 @@ struct RestaurantDetailView: View {
                     VStack {
                         Image(systemName: "menucard")
                             .font(.largeTitle)
-                            .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                            .foregroundColor(.secondary)
                         Text("Bu restorana ait menü bulunmuyor.")
                             .font(MenuLoTheme.Fonts.body)
-                            .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                            .foregroundColor(.secondary)
                     }
                     .frame(maxWidth: .infinity, minHeight: 200)
                     .padding()
                 }
             }
         }
-        .background(MenuLoTheme.Colors.backgroundLight.ignoresSafeArea())
+        .background(Color(.systemBackground).ignoresSafeArea())
         .navigationTitle(restaurant.businessName)
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await loadMenu()
         }
     }
-    
+
     private func loadMenu() async {
         isLoading = true
         errorMessage = nil
@@ -136,7 +137,7 @@ private struct DetailBadge: View {
     let iconName: String
     let text: String
     var iconColor: Color = MenuLoTheme.Colors.primary
-    
+
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: iconName)
@@ -144,11 +145,11 @@ private struct DetailBadge: View {
                 .foregroundColor(iconColor)
             Text(text)
                 .font(MenuLoTheme.Fonts.caption)
-                .foregroundColor(MenuLoTheme.Colors.textPrimary)
+                .foregroundColor(.primary)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(MenuLoTheme.Colors.divider.opacity(0.3))
+        .background(Color(.tertiarySystemFill))
         .clipShape(RoundedRectangle(cornerRadius: MenuLoTheme.CornerRadius.small))
     }
 }
@@ -156,29 +157,29 @@ private struct DetailBadge: View {
 private struct MenuDetailItemRow: View {
     let item: MenuDetailItem
     @State private var isPressed = false
-    
+
     var body: some View {
         HStack(spacing: MenuLoTheme.Spacing.md) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.name)
                     .font(MenuLoTheme.Fonts.body)
                     .fontWeight(.semibold)
-                    .foregroundColor(MenuLoTheme.Colors.textPrimary)
-                
+                    .foregroundColor(.primary)
+
                 if let desc = item.description, !desc.isEmpty {
                     Text(desc)
                         .font(MenuLoTheme.Fonts.caption)
-                        .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                        .foregroundColor(.secondary)
                         .lineLimit(2)
                 }
-                
+
                 Text(item.formattedPrice)
                     .font(MenuLoTheme.Fonts.button)
                     .foregroundColor(MenuLoTheme.Colors.primary)
                     .padding(.top, 2)
             }
             Spacer()
-            
+
             // Eğer resim url varsa, ekleyebiliriz
             if let imgUrl = item.imageUrl, let url = URL(string: imgUrl) {
                 AsyncImage(url: url) { phase in
@@ -196,9 +197,9 @@ private struct MenuDetailItemRow: View {
             }
         }
         .padding()
-        .background(Color.white)
+        .background(Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: MenuLoTheme.CornerRadius.medium))
-        .shadow(color: Color.black.opacity(0.03), radius: 5, x: 0, y: 2)
+        .shadow(color: Color.primary.opacity(0.05), radius: 5, x: 0, y: 2)
         .scaleEffect(isPressed ? 0.98 : 1.0)
         .animation(.spring(response: 0.2), value: isPressed)
     }

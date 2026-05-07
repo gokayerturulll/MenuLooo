@@ -129,25 +129,106 @@ class NetworkManager {
         guard let url = URL(string: "\(baseURL)/restaurants/\(restaurantId)/menu") else {
             throw NetworkError.badURL
         }
-        
+
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        
+
         if !token.isEmpty {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
-        
+
         let (data, response) = try await URLSession.shared.data(for: request)
-        
+
         guard let httpResponse = response as? HTTPURLResponse else {
             throw NetworkError.unknown
         }
-        
+
         if !(200...299).contains(httpResponse.statusCode) {
             throw NetworkError.serverError("Menü getirilemedi (Status: \(httpResponse.statusCode))")
         }
-        
+
         let decoded = try JSONDecoder().decode(MenuResponse.self, from: data)
         return decoded.data
+    }
+
+    // MARK: - Owner Menu CRUD
+    //
+    // Aşağıdaki dört method, işletme paneli (MenuManagerView) için yazılmıştır.
+    // Backend'de henüz aktif endpoint olmayabilir — sözleşme aşağıdaki gibidir:
+    //
+    //   GET    /api/restaurants/:rid/menu/items    → flat list
+    //   POST   /api/restaurants/:rid/menu/items    → create (body: OwnerMenuItemPayload)
+    //   PUT    /api/menu/items/:itemId             → update
+    //   DELETE /api/menu/items/:itemId             → delete
+    //
+    // Tümü Authorization: Bearer <token> gerektirir; backend tarafında
+    // owner-only middleware ile korunmalıdır.
+
+    /// İşletmenin kendi menüsünü flat liste olarak çeker.
+    func fetchOwnerMenu(restaurantId: Int) async throws -> [OwnerMenuItem] {
+        guard let url = URL(string: "\(baseURL)/restaurants/\(restaurantId)/menu/items") else {
+            throw NetworkError.badURL
+        }
+        let (data, response) = try await URLSession.shared.data(for: authedRequest(url: url, method: "GET"))
+        try Self.validateStatus(response)
+        return try JSONDecoder().decode(OwnerMenuListResponse.self, from: data).data
+    }
+
+    /// Yeni menü öğesi oluşturur.
+    func createMenuItem(restaurantId: Int, payload: OwnerMenuItemPayload) async throws -> OwnerMenuItem {
+        guard let url = URL(string: "\(baseURL)/restaurants/\(restaurantId)/menu/items") else {
+            throw NetworkError.badURL
+        }
+        let body = try JSONEncoder().encode(payload)
+        let (data, response) = try await URLSession.shared.data(for: authedRequest(url: url, method: "POST", body: body))
+        try Self.validateStatus(response, errorPayload: data)
+        return try JSONDecoder().decode(OwnerMenuItemResponse.self, from: data).data
+    }
+
+    /// Mevcut menü öğesini günceller.
+    func updateMenuItem(itemId: Int, payload: OwnerMenuItemPayload) async throws -> OwnerMenuItem {
+        guard let url = URL(string: "\(baseURL)/menu/items/\(itemId)") else {
+            throw NetworkError.badURL
+        }
+        let body = try JSONEncoder().encode(payload)
+        let (data, response) = try await URLSession.shared.data(for: authedRequest(url: url, method: "PUT", body: body))
+        try Self.validateStatus(response, errorPayload: data)
+        return try JSONDecoder().decode(OwnerMenuItemResponse.self, from: data).data
+    }
+
+    /// Menü öğesini siler.
+    func deleteMenuItem(itemId: Int) async throws {
+        guard let url = URL(string: "\(baseURL)/menu/items/\(itemId)") else {
+            throw NetworkError.badURL
+        }
+        let (_, response) = try await URLSession.shared.data(for: authedRequest(url: url, method: "DELETE"))
+        try Self.validateStatus(response)
+    }
+
+    // MARK: - Helpers
+
+    private func authedRequest(url: URL, method: String, body: Data? = nil) -> URLRequest {
+        var req = URLRequest(url: url)
+        req.httpMethod = method
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        if !token.isEmpty {
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        req.httpBody = body
+        return req
+    }
+
+    private static func validateStatus(_ response: URLResponse, errorPayload: Data? = nil) throws {
+        guard let http = response as? HTTPURLResponse else { throw NetworkError.unknown }
+        if (200...299).contains(http.statusCode) { return }
+
+        // Backend "{success:false,message:...}" şemasında bir hata gönderdiyse onu yüzeye çıkar
+        if let payload = errorPayload,
+           let envelope = try? JSONDecoder().decode(OwnerMenuDeleteResponse.self, from: payload),
+           let msg = envelope.message {
+            throw NetworkError.serverError(msg)
+        }
+        throw NetworkError.serverError("İstek başarısız (Status: \(http.statusCode))")
     }
 }

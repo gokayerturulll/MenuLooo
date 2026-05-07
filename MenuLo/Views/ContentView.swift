@@ -16,14 +16,20 @@ struct ContentView: View {
     @StateObject private var authVM = AuthViewModel()
     
     var body: some View {
-        // Eğer kullanıcı giriş yapmamışsa (LoginView) gösterilir.
-        if !authVM.isAuthenticated {
+        // Login sonrası kullanıcı tipine göre yönlendirme:
+        // .login          → LoginView
+        // .customerHome   → MainTabView (Keşfet açılır)
+        // .businessHome   → MenuManagerView paneli
+        switch authVM.rootDestination {
+        case .login:
             LoginView()
                 .environmentObject(authVM)
-        } else {
-            // Giriş yapıldıysa Ana Sekmeler gösterilir.
+        case .customerHome:
             MainTabView()
-            .environmentObject(authVM)
+                .environmentObject(authVM)
+        case .businessHome:
+            BusinessMainTabView()
+                .environmentObject(authVM)
         }
     }
 }

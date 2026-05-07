@@ -31,55 +31,72 @@ import SwiftUI
 ///     // authVM.login(email:password:) şeklinde çağrılır
 /// }
 /// ```
+/// Login/Register sonrası kullanıcı tipine göre yönlendirilecek kök ekran.
+enum RootDestination {
+    case login          // Henüz giriş yapılmadı → LoginView
+    case customerHome   // Müşteri → MainTabView (Keşfet açılır)
+    case businessHome   // İşletme → MenuManagerView paneli
+}
+
 @MainActor
 class AuthViewModel: ObservableObject {
-    
+
     // MARK: - Published Properties (View'ı Güncelleyen Değerler)
-    
+
     /// Kullanıcı giriş yapmış mı? `true` ise MainTabView, `false` ise LoginView gösterilir.
     @Published var isAuthenticated: Bool = false
-    
+
     /// Şu an giriş yapmış olan kullanıcının bilgileri. Giriş yapılmamışsa `nil`.
     @Published var currentUser: User? = nil
-    
+
     /// Giriş/kayıt işlemi devam ederken `true` olur. Loading spinner göstermek için.
     @Published var isLoading: Bool = false
-    
+
     /// Hata mesajı. Boş string ise hata yok demektir. Alert göstermek için kullanılır.
     @Published var errorMessage: String = ""
-    
+
     /// Hata alert'inin gösterilip gösterilmediğini kontrol eder.
     @Published var showError: Bool = false
+
+    /// Routing helper — ContentView bunu izleyerek doğru kök ekrana yönlendirir.
+    var rootDestination: RootDestination {
+        guard isAuthenticated, let user = currentUser else { return .login }
+        return user.userType == .business ? .businessHome : .customerHome
+    }
     
     // MARK: - Giriş (Login)
     
     /// E-posta ve şifre ile giriş yapar.
     ///
-    /// Şimdilik gerçek API çağrısı yapılmıyor — placeholder implementasyon.
-    /// İlerleyen aşamalarda `NetworkService` kullanılarak backend'e bağlanacak.
-    ///
     /// - Parameters:
     ///   - email: Kullanıcının e-posta adresi
     ///   - password: Kullanıcının şifresi
-    func login(email: String, password: String) {
-        // Basit doğrulama
+    ///   - userType: Login ekranında seçilen tip (Customer / Business).
+    ///     Backend'den dönen gerçek role ile karşılaştırılır; uyuşmazsa
+    ///     kullanıcıya doğru sekmeden girmesi gerektiği bildirilir.
+    func login(email: String, password: String, userType: UserType) {
         guard !email.isEmpty, !password.isEmpty else {
             self.errorMessage = "E-posta ve şifre alanları boş bırakılamaz."
             self.showError = true
             return
         }
-        
+
         isLoading = true
-        
-        // Gerçek API çağrısı
+
         Task {
             do {
                 let response = try await NetworkManager.shared.login(email: email, password: password)
                 if response.success, let user = response.user {
-                    // Token'ı AppStorage'a NetworkManager içinde kaydettirebiliriz veya burada UserDefaults ile yapabiliriz.
-                    // NetworkManager'da @AppStorage("authToken") kullanıldığı için orada SwiftUI tarafında state güncellenecektir.
+                    // Seçilen sekme ile gerçek hesap rolü uyumlu mu?
+                    guard user.userType == userType else {
+                        let expected = user.userType == .business ? "İşletme" : "Müşteri"
+                        self.errorMessage = "Bu hesap \(expected) olarak kayıtlı. Lütfen \(expected) sekmesinden giriş yapın."
+                        self.showError = true
+                        self.isLoading = false
+                        return
+                    }
+
                     UserDefaults.standard.set(response.token, forKey: "authToken")
-                    
                     self.currentUser = user
                     self.isAuthenticated = true
                 } else {

@@ -5,31 +5,33 @@
 //  MenuLo/Views/Business/MyBusinessView.swift
 //
 //  İşletme sahibinin kendi işletme profilini yönettiği ekran.
-//  İşletme adı, konum, açıklama ve çalışma saatlerini düzenleyebilir.
+//  Vitrin: işletme adı, mutfak tipi, adres, çalışma saatleri.
 //
 
 import SwiftUI
 
 struct MyBusinessView: View {
-    
+
     // MARK: - Düzenlenebilir Alanlar (Mock Veri)
     @State private var businessName  = "Lezzet Durağı"
     @State private var businessDesc  = "Kadıköy'ün kalbinde, taze malzemelerle hazırlanan el yapımı pizza ve burger çeşitlerimizle hizmetinizdeyiz."
     @State private var address       = "Moda Caddesi No:42, Kadıköy, İstanbul"
     @State private var phone         = "+90 216 555 01 23"
     @State private var website       = "www.lezzetduragi.com"
+    @State private var cuisineType   = "Türk & Dünya Mutfağı"
 
-    // Çalışma Saatleri
+    // Konum (mock — ileride gerçek koordinat picker eklenebilir)
+    @State private var latitude:  Double = 40.987
+    @State private var longitude: Double = 29.025
+
+    // Çalışma saatleri
     @State private var openHour  = 9
     @State private var openMin   = 0
     @State private var closeHour = 22
     @State private var closeMin  = 0
-    
-    @State private var isEditingHours  = false
-    @State private var showSaveAlert   = false
-    @State private var isLoading       = false
+    @State private var showSaveAlert = false
+    @State private var isLoading     = false
 
-    // Günler bazlı açık/kapalı
     @State private var openDays: [String: Bool] = [
         "Pazartesi": true,  "Salı": true,  "Çarşamba": true,
         "Perşembe": true,   "Cuma": true,  "Cumartesi": true,
@@ -37,73 +39,31 @@ struct MyBusinessView: View {
     ]
     let dayOrder = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
 
-    // MARK: - Mock Stats
+    let cuisineOptions = [
+        "Türk Mutfağı", "Türk & Dünya Mutfağı", "Pizza & Burger",
+        "Sushi & Asya", "Kahvaltı", "Vegan / Vegetaryan",
+        "Tatlı & Pastane", "Kahve & İçecek"
+    ]
+
+    // Mock istatistikler
     private let stats: [(icon: String, label: String, value: String, color: Color)] = [
-        ("eye.fill",          "Görüntülenme",   "1.2K",  Color(hex: "#6C5CE7")),
-        ("star.fill",         "Ortalama Puan",  "4.7",   Color(hex: "#FDCB6E")),
-        ("heart.fill",        "Favori",         "248",   Color(hex: "#E17055")),
-        ("leaf.fill",         "Yeşil Menü",     "3",     Color(hex: "#00B894")),
+        ("eye.fill",    "Görüntülenme",  "1.2K", Color(hex: "#6C5CE7")),
+        ("star.fill",   "Puan",          "4.7",  Color(hex: "#FDCB6E")),
+        ("heart.fill",  "Favori",        "248",  Color(hex: "#E17055")),
+        ("leaf.fill",   "Yeşil Menü",    "3",    MenuLoTheme.Colors.success),
     ]
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
+        ScrollView {
+            VStack(spacing: 0) {
+
+                // MARK: - Hero / Cover
+                MyBusinessHero(name: businessName, location: address, cuisine: cuisineType)
+
+                // Avatar overflow için boşluk
+                Spacer().frame(height: 24)
+
                 VStack(spacing: MenuLoTheme.Spacing.lg) {
-
-                    // MARK: - Hero / Cover
-                    ZStack(alignment: .bottomLeading) {
-                        Rectangle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        MenuLoTheme.Colors.primary.opacity(0.8),
-                                        Color(hex: "#FF6B35").opacity(0.9)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(height: 160)
-                            .overlay(
-                                Image(systemName: "building.2.fill")
-                                    .font(.system(size: 60))
-                                    .foregroundColor(.white.opacity(0.15))
-                                    .offset(x: 60, y: 20)
-                            )
-
-                        HStack(alignment: .bottom, spacing: MenuLoTheme.Spacing.md) {
-                            ZStack {
-                                Circle()
-                                    .fill(.white)
-                                    .frame(width: 72, height: 72)
-                                    .shadow(radius: 6)
-                                Text("🍕")
-                                    .font(.system(size: 36))
-                            }
-                            .offset(y: 20)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(businessName)
-                                    .font(MenuLoTheme.Fonts.title)
-                                    .foregroundColor(.white)
-                                    .fontWeight(.bold)
-                                HStack(spacing: 4) {
-                                    Image(systemName: "mappin.circle.fill")
-                                        .font(.caption)
-                                    Text("Kadıköy, İstanbul")
-                                        .font(MenuLoTheme.Fonts.caption)
-                                }
-                                .foregroundColor(.white.opacity(0.85))
-                            }
-                            .padding(.bottom, MenuLoTheme.Spacing.sm)
-                        }
-                        .padding(.horizontal, MenuLoTheme.Spacing.lg)
-                        .padding(.bottom, MenuLoTheme.Spacing.md)
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: 0))
-
-                    // Padding for avatar overflow
-                    Spacer().frame(height: 12)
 
                     // MARK: - İstatistikler
                     LazyVGrid(
@@ -121,64 +81,83 @@ struct MyBusinessView: View {
                     // MARK: - İşletme Bilgileri
                     BusinessSection(title: "İşletme Bilgileri", icon: "info.circle.fill") {
                         VStack(spacing: MenuLoTheme.Spacing.md) {
-                            EditableField(label: "İşletme Adı",  icon: "building.2",     text: $businessName)
-                            EditableField(label: "Adres",         icon: "mappin",          text: $address)
-                            EditableField(label: "Telefon",       icon: "phone",           text: $phone)
-                            EditableField(label: "Web Sitesi",    icon: "globe",           text: $website)
+                            EditableField(label: "Restoran Adı",  icon: "building.2", text: $businessName)
+
+                            // Mutfak Tipi (picker)
+                            CuisinePickerRow(selection: $cuisineType, options: cuisineOptions)
+
+                            EditableField(label: "Adres",     icon: "mappin",   text: $address)
+                            EditableField(label: "Telefon",   icon: "phone",    text: $phone)
+                            EditableField(label: "Web Sitesi", icon: "globe",   text: $website)
 
                             // Açıklama
                             VStack(alignment: .leading, spacing: 6) {
                                 Label("Açıklama", systemImage: "text.alignleft")
                                     .font(MenuLoTheme.Fonts.caption)
-                                    .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                                    .foregroundColor(.secondary)
                                 TextEditor(text: $businessDesc)
                                     .font(MenuLoTheme.Fonts.body)
-                                    .foregroundColor(MenuLoTheme.Colors.textPrimary)
+                                    .foregroundColor(.primary)
                                     .frame(minHeight: 80)
                                     .padding(MenuLoTheme.Spacing.sm)
-                                    .background(MenuLoTheme.Colors.backgroundLight)
+                                    .background(Color(.tertiarySystemFill))
                                     .cornerRadius(MenuLoTheme.CornerRadius.medium)
+                                    .scrollContentBackground(.hidden)
                             }
+                        }
+                    }
+
+                    // MARK: - Konum
+                    BusinessSection(title: "Harita Konumu", icon: "map.fill") {
+                        VStack(spacing: MenuLoTheme.Spacing.sm) {
+                            HStack(spacing: MenuLoTheme.Spacing.md) {
+                                CoordinateField(label: "Enlem",  value: $latitude)
+                                CoordinateField(label: "Boylam", value: $longitude)
+                            }
+
+                            Label("Müşteriler bu koordinatta haritada görür. Sürükle-yerleştir map seçici yakında.",
+                                  systemImage: "info.circle")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 4)
+                                .padding(.top, 4)
                         }
                     }
 
                     // MARK: - Çalışma Saatleri
                     BusinessSection(title: "Çalışma Saatleri", icon: "clock.fill") {
                         VStack(spacing: MenuLoTheme.Spacing.md) {
-                            // Açılış / Kapanış
                             HStack(spacing: MenuLoTheme.Spacing.md) {
                                 TimePickerCard(
                                     label: "Açılış",
                                     icon: "sunrise.fill",
                                     color: MenuLoTheme.Colors.success,
-                                    hour: $openHour,
-                                    minute: $openMin
+                                    hour: $openHour, minute: $openMin
                                 )
                                 Image(systemName: "arrow.right")
-                                    .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                                    .foregroundColor(.secondary)
                                 TimePickerCard(
                                     label: "Kapanış",
                                     icon: "sunset.fill",
                                     color: MenuLoTheme.Colors.error,
-                                    hour: $closeHour,
-                                    minute: $closeMin
+                                    hour: $closeHour, minute: $closeMin
                                 )
                             }
 
                             Divider()
 
-                            // Günler
-                            VStack(spacing: MenuLoTheme.Spacing.xs) {
-                                ForEach(dayOrder, id: \.self) { day in
+                            VStack(spacing: 0) {
+                                ForEach(Array(dayOrder.enumerated()), id: \.element) { idx, day in
                                     HStack {
                                         Text(day)
                                             .font(MenuLoTheme.Fonts.body)
-                                            .foregroundColor(MenuLoTheme.Colors.textPrimary)
+                                            .foregroundColor(.primary)
                                         Spacer()
                                         if openDays[day] == true {
-                                            Text("Open @ \(String(format: "%02d:%02d", openHour, openMin)) - Close @ \(String(format: "%02d:%02d", closeHour, closeMin))")
+                                            Text(String(format: "%02d:%02d – %02d:%02d",
+                                                        openHour, openMin, closeHour, closeMin))
                                                 .font(MenuLoTheme.Fonts.caption)
-                                                .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                                                .foregroundColor(.secondary)
                                         } else {
                                             Text("Kapalı")
                                                 .font(MenuLoTheme.Fonts.caption)
@@ -192,41 +171,151 @@ struct MyBusinessView: View {
                                         .labelsHidden()
                                         .scaleEffect(0.8)
                                     }
-                                    .padding(.vertical, 4)
-                                    if day != dayOrder.last {
-                                        Divider()
-                                    }
+                                    .padding(.vertical, 6)
+                                    if idx < dayOrder.count - 1 { Divider() }
                                 }
                             }
                         }
                     }
 
-                    // MARK: - Kaydet Butonu
+                    // MARK: - Kaydet
                     PrimaryButton(title: "Değişiklikleri Kaydet", isLoading: isLoading) {
                         isLoading = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                             isLoading = false
                             showSaveAlert = true
                         }
                     }
                     .padding(.horizontal, MenuLoTheme.Spacing.lg)
-                    .padding(.bottom, MenuLoTheme.Spacing.xl)
+                    .padding(.bottom, MenuLoTheme.Spacing.xxl)
                 }
+                .padding(.top, MenuLoTheme.Spacing.lg)
             }
-            .background(MenuLoTheme.Colors.backgroundLight)
-            .navigationTitle("My Business")
-            .navigationBarTitleDisplayMode(.large)
-            .alert("Kaydedildi ✅", isPresented: $showSaveAlert) {
-                Button("Tamam", role: .cancel) {}
-            } message: {
-                Text("İşletme bilgileriniz başarıyla güncellendi.")
+        }
+        .background(MenuLoTheme.Colors.backgroundLight.ignoresSafeArea())
+        .navigationTitle("Dükkanım")
+        .navigationBarTitleDisplayMode(.large)
+        .alert("Kaydedildi ✅", isPresented: $showSaveAlert) {
+            Button("Tamam", role: .cancel) {}
+        } message: {
+            Text("İşletme bilgileriniz başarıyla güncellendi.")
+        }
+    }
+}
+
+// MARK: - Hero (cover + emoji avatar + ad/lokasyon)
+private struct MyBusinessHero: View {
+    let name: String
+    let location: String
+    let cuisine: String
+
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            MenuLoTheme.Colors.primary.opacity(0.85),
+                            Color(hex: "#FF6B35").opacity(0.95)
+                        ],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    )
+                )
+                .frame(height: 170)
+                .overlay(
+                    Image(systemName: "building.2.fill")
+                        .font(.system(size: 80))
+                        .foregroundColor(.white.opacity(0.12))
+                        .offset(x: 100, y: 30)
+                )
+
+            HStack(alignment: .bottom, spacing: MenuLoTheme.Spacing.md) {
+                ZStack {
+                    Circle()
+                        .fill(MenuLoTheme.Colors.cardBackground)
+                        .frame(width: 76, height: 76)
+                        .shadow(color: .primary.opacity(0.18), radius: 8, x: 0, y: 4)
+                    Text("🍕")
+                        .font(.system(size: 38))
+                }
+                .offset(y: 24)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(name)
+                        .font(MenuLoTheme.Fonts.title)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+
+                    HStack(spacing: 4) {
+                        Image(systemName: "fork.knife")
+                            .font(.caption2)
+                        Text(cuisine)
+                            .font(MenuLoTheme.Fonts.caption)
+                            .lineLimit(1)
+                    }
+                    .foregroundColor(.white.opacity(0.9))
+                }
+                .padding(.bottom, MenuLoTheme.Spacing.sm)
+
+                Spacer()
             }
+            .padding(.horizontal, MenuLoTheme.Spacing.lg)
+            .padding(.bottom, MenuLoTheme.Spacing.md)
+        }
+    }
+}
+
+// MARK: - Cuisine Picker
+private struct CuisinePickerRow: View {
+    @Binding var selection: String
+    let options: [String]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("Mutfak Tipi", systemImage: "fork.knife")
+                .font(MenuLoTheme.Fonts.caption)
+                .foregroundColor(.secondary)
+
+            HStack {
+                Image(systemName: "leaf.circle.fill")
+                    .foregroundColor(MenuLoTheme.Colors.primary)
+                    .frame(width: 24)
+                Picker("Mutfak Tipi", selection: $selection) {
+                    ForEach(options, id: \.self) { Text($0).tag($0) }
+                }
+                .pickerStyle(.menu)
+                .tint(.primary)
+                Spacer()
+            }
+            .padding(MenuLoTheme.Spacing.md)
+            .background(Color(.tertiarySystemFill))
+            .cornerRadius(MenuLoTheme.CornerRadius.medium)
+        }
+    }
+}
+
+private struct CoordinateField: View {
+    let label: String
+    @Binding var value: Double
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label)
+                .font(MenuLoTheme.Fonts.caption)
+                .foregroundColor(.secondary)
+            TextField(label, value: $value, format: .number.precision(.fractionLength(4)))
+                .font(MenuLoTheme.Fonts.body)
+                .foregroundColor(.primary)
+                .keyboardType(.decimalPad)
+                .padding(MenuLoTheme.Spacing.md)
+                .background(Color(.tertiarySystemFill))
+                .cornerRadius(MenuLoTheme.CornerRadius.medium)
         }
     }
 }
 
 // MARK: - Yardımcı Bileşenler
-
 private struct StatCard: View {
     let icon: String
     let label: String
@@ -241,17 +330,17 @@ private struct StatCard: View {
             Text(value)
                 .font(MenuLoTheme.Fonts.subtitle)
                 .fontWeight(.bold)
-                .foregroundColor(MenuLoTheme.Colors.textPrimary)
+                .foregroundColor(.primary)
             Text(label)
                 .font(.caption2)
-                .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(MenuLoTheme.Spacing.md)
         .background(MenuLoTheme.Colors.cardBackground)
         .cornerRadius(MenuLoTheme.CornerRadius.large)
-        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+        .shadow(color: .primary.opacity(0.05), radius: 4, x: 0, y: 2)
     }
 }
 
@@ -264,12 +353,12 @@ private struct EditableField: View {
         VStack(alignment: .leading, spacing: 6) {
             Label(label, systemImage: icon)
                 .font(MenuLoTheme.Fonts.caption)
-                .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                .foregroundColor(.secondary)
             TextField(label, text: $text)
                 .font(MenuLoTheme.Fonts.body)
-                .foregroundColor(MenuLoTheme.Colors.textPrimary)
+                .foregroundColor(.primary)
                 .padding(MenuLoTheme.Spacing.md)
-                .background(MenuLoTheme.Colors.backgroundLight)
+                .background(Color(.tertiarySystemFill))
                 .cornerRadius(MenuLoTheme.CornerRadius.medium)
         }
     }
@@ -290,7 +379,7 @@ private struct TimePickerCard: View {
                     .font(.caption)
                 Text(label)
                     .font(MenuLoTheme.Fonts.caption)
-                    .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                    .foregroundColor(.secondary)
             }
 
             HStack(spacing: 4) {
@@ -305,7 +394,7 @@ private struct TimePickerCard: View {
 
                 Text(":")
                     .font(MenuLoTheme.Fonts.title)
-                    .foregroundColor(MenuLoTheme.Colors.textPrimary)
+                    .foregroundColor(.primary)
 
                 Picker("Dakika", selection: $minute) {
                     ForEach([0, 15, 30, 45], id: \.self) { m in
@@ -316,7 +405,7 @@ private struct TimePickerCard: View {
                 .frame(width: 50, height: 70)
                 .clipped()
             }
-            .background(MenuLoTheme.Colors.backgroundLight)
+            .background(Color(.tertiarySystemFill))
             .cornerRadius(MenuLoTheme.CornerRadius.medium)
         }
         .frame(maxWidth: .infinity)
@@ -337,12 +426,16 @@ private struct BusinessSection<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: MenuLoTheme.Spacing.md) {
-            HStack(spacing: MenuLoTheme.Spacing.sm) {
+            HStack(spacing: 6) {
                 Image(systemName: icon)
                     .foregroundColor(MenuLoTheme.Colors.primary)
+                    .font(.footnote)
                 Text(title)
-                    .font(MenuLoTheme.Fonts.subtitle)
-                    .foregroundColor(MenuLoTheme.Colors.textPrimary)
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.secondary)
+                    .textCase(.uppercase)
+                    .tracking(0.5)
             }
             .padding(.horizontal, MenuLoTheme.Spacing.lg)
 
@@ -352,7 +445,7 @@ private struct BusinessSection<Content: View>: View {
             .padding(MenuLoTheme.Spacing.lg)
             .background(MenuLoTheme.Colors.cardBackground)
             .cornerRadius(MenuLoTheme.CornerRadius.large)
-            .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+            .shadow(color: .primary.opacity(0.05), radius: 8, x: 0, y: 2)
             .padding(.horizontal, MenuLoTheme.Spacing.lg)
         }
     }
@@ -360,5 +453,7 @@ private struct BusinessSection<Content: View>: View {
 
 // MARK: - Preview
 #Preview {
-    MyBusinessView()
+    NavigationStack {
+        MyBusinessView()
+    }
 }

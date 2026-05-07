@@ -68,11 +68,26 @@ exports.login = async (req, res) => {
         
         // JWT Oluştur
         const token = jwt.sign(
-            { user_id: user.user_id, role: user.role }, 
-            process.env.JWT_SECRET || 'fallback_secret_key', 
+            { user_id: user.user_id, role: user.role },
+            process.env.JWT_SECRET || 'fallback_secret_key',
             { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
         );
-        
+
+        // İşletme rollerinde sahibi olduğu restoranı response'a ekle.
+        // iOS tarafında User.restaurantId bu alanı bekliyor; nil değil number gelirse
+        // MenuManagerView doğru restoranın menüsünü çeker.
+        const businessRoles = ['owner', 'admin', 'business'];
+        let restaurantId = null;
+        if (user.role && businessRoles.includes(String(user.role).toLowerCase())) {
+            const ownedRestaurant = await pool.query(
+                'SELECT restaurant_id FROM restaurant WHERE owner_id = $1 ORDER BY restaurant_id ASC LIMIT 1',
+                [user.user_id]
+            );
+            if (ownedRestaurant.rows.length > 0) {
+                restaurantId = ownedRestaurant.rows[0].restaurant_id;
+            }
+        }
+
         res.status(200).json({
             success: true,
             message: 'Giriş başarılı.',
@@ -81,7 +96,8 @@ exports.login = async (req, res) => {
                 user_id: user.user_id,
                 username: user.username,
                 email: user.email,
-                role: user.role
+                role: user.role,
+                restaurant_id: restaurantId
             }
         });
     } catch (error) {

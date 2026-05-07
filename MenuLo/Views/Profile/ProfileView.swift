@@ -278,7 +278,7 @@ private struct BusinessPanelSection: View {
             .padding(.top, MenuLoTheme.Spacing.lg)
 
             VStack(spacing: 1) {
-                NavigationLink(destination: MenuManagerView()) {
+                NavigationLink(destination: MenuManagerView(restaurantId: 1)) {
                     ProfileRow(icon: "list.bullet.rectangle.fill", iconColor: MenuLoTheme.Colors.primary,    title: "Menu Manager",  subtitle: "Ürün ekle, düzenle ve yönet")
                 }
                 Divider().padding(.horizontal, MenuLoTheme.Spacing.lg)

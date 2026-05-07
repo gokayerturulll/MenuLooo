@@ -1,6 +1,43 @@
 import Foundation
 import SwiftUI
 
+// MARK: - MenuBot DTOs
+
+struct AskMenuBotPayload: Encodable {
+    /// nil ise "general gourmet mode" — backend tüm restoranlarda arar.
+    /// Swift JSONEncoder Optional+nil olan alanı serialize etmez, yani
+    /// JSON gövdesinden tamamen çıkar (backend de undefined/null kabul ediyor).
+    let restaurantId: Int?
+    let message: String
+}
+
+struct MenuBotReferencedItem: Decodable {
+    let itemId: Int?
+    let name: String
+    let price: Double?
+    let category: String?
+
+    enum CodingKeys: String, CodingKey {
+        case itemId = "item_id"
+        case name, price, category
+    }
+}
+
+struct MenuBotAnswer: Decodable {
+    let answer: String
+    let referencedItems: [MenuBotReferencedItem]?
+
+    enum CodingKeys: String, CodingKey {
+        case answer
+        case referencedItems = "referenced_items"
+    }
+}
+
+struct MenuBotResponse: Decodable {
+    let success: Bool
+    let data: MenuBotAnswer
+}
+
 enum NetworkError: LocalizedError {
     case serverError(String)
     case badURL
@@ -149,6 +186,25 @@ class NetworkManager {
 
         let decoded = try JSONDecoder().decode(MenuResponse.self, from: data)
         return decoded.data
+    }
+
+    // MARK: - MenuBot AI (Soru-Cevap)
+    //
+    //   POST /api/menubot/ask    body: { restaurantId, message }
+    //   response: { success, data: { answer, referenced_items } }
+
+    /// `restaurantId == nil` → genel gurme modu (tüm restoranlardan akıllı öneri).
+    /// Spesifik bir restoran context'i varsa o ID geçilir → backend yalnızca o
+    /// restoranın menüsünde arama yapar.
+    func askMenuBot(restaurantId: Int?, message: String) async throws -> String {
+        guard let url = URL(string: "\(baseURL)/menubot/ask") else {
+            throw NetworkError.badURL
+        }
+        let payload = AskMenuBotPayload(restaurantId: restaurantId, message: message)
+        let body = try JSONEncoder().encode(payload)
+        let (data, response) = try await URLSession.shared.data(for: authedRequest(url: url, method: "POST", body: body))
+        try Self.validateStatus(response, errorPayload: data)
+        return try JSONDecoder().decode(MenuBotResponse.self, from: data).data.answer
     }
 
     // MARK: - Restaurant Profile (MyBusinessView)

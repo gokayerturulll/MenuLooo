@@ -27,13 +27,15 @@ struct BusinessMainTabView: View {
             }
             .tag(0)
 
-            // Tab 1: Dükkanım (işletme profili)
-            NavigationStack { MyBusinessView() }
-                .tabItem {
-                    Label("Dükkanım",
-                          systemImage: selectedTab == 1 ? "building.2.fill" : "building.2")
-                }
-                .tag(1)
+            // Tab 1: Dükkanım (işletme profili) — kendi restoranının ID'si ile
+            NavigationStack {
+                MyBusinessView(restaurantId: authVM.currentUser?.restaurantId ?? 1)
+            }
+            .tabItem {
+                Label("Dükkanım",
+                      systemImage: selectedTab == 1 ? "building.2.fill" : "building.2")
+            }
+            .tag(1)
 
             // Tab 2: Hesap
             NavigationStack { BusinessAccountView() }

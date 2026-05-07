@@ -27,6 +27,143 @@ exports.getAllRestaurants = async (req, res) => {
     }
 };
 
+// ============================================================================
+// Restoran Profili — Detay ve Güncelleme (MyBusinessView)
+// ----------------------------------------------------------------------------
+//   GET /api/restaurants/:rid           → public (restoran detayı)
+//   PUT /api/restaurants/:rid           → ownerOnly (kendi restoranını günceller)
+//
+// working_hours JSONB şeması (iOS WorkingHours struct'ı ile birebir):
+// {
+//   "open_hour": 9, "open_minute": 0,
+//   "close_hour": 22, "close_minute": 0,
+//   "open_days": { "Pazartesi": true, "Salı": true, ... }
+// }
+// ============================================================================
+
+const RESTAURANT_DETAIL_COLUMNS = `
+    restaurant_id,
+    owner_id,
+    business_name,
+    address,
+    phone,
+    website,
+    description,
+    cuisine_type,
+    working_hours,
+    ST_X(location_point::geometry) AS longitude,
+    ST_Y(location_point::geometry) AS latitude
+`;
+
+/** GET /api/restaurants/:rid */
+exports.getRestaurantById = async (req, res) => {
+    try {
+        const restaurantId = parseInt(req.params.rid, 10);
+        if (Number.isNaN(restaurantId)) {
+            return res.status(400).json({ success: false, message: 'Geçersiz restoran kimliği.' });
+        }
+
+        const result = await pool.query(
+            `SELECT ${RESTAURANT_DETAIL_COLUMNS} FROM restaurant WHERE restaurant_id = $1 LIMIT 1`,
+            [restaurantId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Restoran bulunamadı.' });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: result.rows[0]
+        });
+    } catch (error) {
+        console.error('getRestaurantById Error:', error);
+        res.status(500).json({ success: false, message: 'Restoran detayları getirilemedi.' });
+    }
+};
+
+/** PUT /api/restaurants/:rid — ownerOnly */
+exports.updateRestaurant = async (req, res) => {
+    try {
+        const restaurantId = parseInt(req.params.rid, 10);
+        if (Number.isNaN(restaurantId)) {
+            return res.status(400).json({ success: false, message: 'Geçersiz restoran kimliği.' });
+        }
+
+        // Sahiplik kontrolü
+        const ownerCheck = await pool.query(
+            'SELECT owner_id FROM restaurant WHERE restaurant_id = $1',
+            [restaurantId]
+        );
+        if (ownerCheck.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Restoran bulunamadı.' });
+        }
+        if (ownerCheck.rows[0].owner_id !== req.user.user_id) {
+            return res.status(403).json({ success: false, message: 'Bu restoranı güncelleyemezsiniz.' });
+        }
+
+        const {
+            business_name,
+            address,
+            phone,
+            website,
+            description,
+            cuisine_type,
+            latitude,
+            longitude,
+            working_hours
+        } = req.body;
+
+        const hasCoords = (typeof latitude === 'number' && typeof longitude === 'number');
+        const workingHoursJson = working_hours ? JSON.stringify(working_hours) : null;
+
+        // Koordinat geldiyse PostGIS POINT'i de güncelle, gelmediyse mevcut korunur.
+        const sql = hasCoords
+            ? `
+                UPDATE restaurant SET
+                    business_name  = COALESCE($1, business_name),
+                    address        = COALESCE($2, address),
+                    phone          = COALESCE($3, phone),
+                    website        = COALESCE($4, website),
+                    description    = COALESCE($5, description),
+                    cuisine_type   = COALESCE($6, cuisine_type),
+                    working_hours  = COALESCE($7::jsonb, working_hours),
+                    location_point = ST_SetSRID(ST_MakePoint($8, $9), 4326)::geometry
+                WHERE restaurant_id = $10
+                RETURNING ${RESTAURANT_DETAIL_COLUMNS}
+            `
+            : `
+                UPDATE restaurant SET
+                    business_name = COALESCE($1, business_name),
+                    address       = COALESCE($2, address),
+                    phone         = COALESCE($3, phone),
+                    website       = COALESCE($4, website),
+                    description   = COALESCE($5, description),
+                    cuisine_type  = COALESCE($6, cuisine_type),
+                    working_hours = COALESCE($7::jsonb, working_hours)
+                WHERE restaurant_id = $8
+                RETURNING ${RESTAURANT_DETAIL_COLUMNS}
+            `;
+
+        const params = hasCoords
+            ? [business_name ?? null, address ?? null, phone ?? null, website ?? null,
+               description ?? null, cuisine_type ?? null, workingHoursJson,
+               longitude, latitude, restaurantId]
+            : [business_name ?? null, address ?? null, phone ?? null, website ?? null,
+               description ?? null, cuisine_type ?? null, workingHoursJson, restaurantId];
+
+        const updated = await pool.query(sql, params);
+
+        res.status(200).json({
+            success: true,
+            data: updated.rows[0]
+        });
+    } catch (error) {
+        console.error('updateRestaurant Error:', error);
+        res.status(500).json({ success: false, message: 'Restoran güncellenirken sunucu hatası oluştu.' });
+    }
+};
+
 exports.getRestaurantMenu = async (req, res) => {
     try {
         const { id } = req.params;

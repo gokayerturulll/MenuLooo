@@ -34,7 +34,7 @@ struct BusinessAccountView: View {
 
                     // İşletme bağlantıları
                     AccountMenuGroup(title: "İşletme", icon: "building.2.fill") {
-                        NavigationLink(destination: MyBusinessView()) {
+                        NavigationLink(destination: MyBusinessView(restaurantId: authVM.currentUser?.restaurantId ?? 1)) {
                             AccountRow(
                                 icon: "storefront.fill",
                                 iconColor: MenuLoTheme.Colors.primary,

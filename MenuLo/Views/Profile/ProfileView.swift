@@ -282,7 +282,7 @@ private struct BusinessPanelSection: View {
                     ProfileRow(icon: "list.bullet.rectangle.fill", iconColor: MenuLoTheme.Colors.primary,    title: "Menu Manager",  subtitle: "Ürün ekle, düzenle ve yönet")
                 }
                 Divider().padding(.horizontal, MenuLoTheme.Spacing.lg)
-                NavigationLink(destination: MyBusinessView()) {
+                NavigationLink(destination: MyBusinessView(restaurantId: 1)) {
                     ProfileRow(icon: "building.2.fill",            iconColor: Color(hex: "#6C5CE7"),         title: "My Business",   subtitle: "İşletme bilgileri ve çalışma saatleri")
                 }
                 Divider().padding(.horizontal, MenuLoTheme.Spacing.lg)

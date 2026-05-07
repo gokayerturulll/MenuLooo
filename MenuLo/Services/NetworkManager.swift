@@ -151,6 +151,32 @@ class NetworkManager {
         return decoded.data
     }
 
+    // MARK: - Restaurant Profile (MyBusinessView)
+    //
+    //   GET /api/restaurants/:rid     → public detay
+    //   PUT /api/restaurants/:rid     → ownerOnly, body: RestaurantUpdatePayload
+
+    /// Restoran detaylarını çeker (public — token opsiyonel).
+    func fetchRestaurantDetails(restaurantId: Int) async throws -> RestaurantDetail {
+        guard let url = URL(string: "\(baseURL)/restaurants/\(restaurantId)") else {
+            throw NetworkError.badURL
+        }
+        let (data, response) = try await URLSession.shared.data(for: authedRequest(url: url, method: "GET"))
+        try Self.validateStatus(response, errorPayload: data)
+        return try JSONDecoder().decode(RestaurantDetailResponse.self, from: data).data
+    }
+
+    /// Restoran bilgilerini günceller (Bearer + owner zorunlu).
+    func updateRestaurantDetails(restaurantId: Int, payload: RestaurantUpdatePayload) async throws -> RestaurantDetail {
+        guard let url = URL(string: "\(baseURL)/restaurants/\(restaurantId)") else {
+            throw NetworkError.badURL
+        }
+        let body = try JSONEncoder().encode(payload)
+        let (data, response) = try await URLSession.shared.data(for: authedRequest(url: url, method: "PUT", body: body))
+        try Self.validateStatus(response, errorPayload: data)
+        return try JSONDecoder().decode(RestaurantDetailResponse.self, from: data).data
+    }
+
     // MARK: - Owner Menu CRUD
     //
     // Aşağıdaki dört method, işletme paneli (MenuManagerView) için yazılmıştır.

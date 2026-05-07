@@ -21,20 +21,22 @@ iOS kullanıcılarının alışkın olduğu akıcı deneyimi sağlamak için tas
 ## 🏗️ 2. Teknoloji Yığını (Tech Stack)
 
 ### 📱 Frontend (iOS Client)
-* **Çerçeve:** React Native (Expo) **VEYA** Swift (SwiftUI).
+* **Çerçeve:**  Swift (SwiftUI).
 * **Donanım Erişimleri:** * QR okuma işlemleri için cihaz kamerası entegrasyonu (örn. `expo-camera` veya `AVFoundation`).
     * Konum tabanlı hizmetler için GPS entegrasyonu (örn. `expo-location` veya `CoreLocation`).
 * **Durum Yönetimi (State Management):** Redux Toolkit veya Zustand (Kullanıcı seansları, favoriler ve sepet yönetimi için).
 
 ### ⚙️ Backend & Servisler
 * **Sunucu:** Node.js, Express.js.
-* **Veritabanı:** MySQL (İlişkisel veriler, menü hiyerarşisi ve kullanıcı profilleri için).
+* **Veritabanı:** PostgreSQL (İlişkisel veriler, menü hiyerarşisi ve kullanıcı profilleri için).
 * **Gerçek Zamanlı İletişim:** Socket.io (Grup Karar Odaları ve anlık Yeşil Menü bildirimleri için).
 
-### 🧠 Veri Bilimi ve Yapay Zeka (MenuBot)
-* **Dil ve Kütüphaneler:** Python, NumPy, Pandas (Veri işleme, analiz ve makine öğrenimi modelleri için).
-* **Görev:** Kullanıcının geçmiş aramaları, bütçesi ve konumu üzerinden anlık restoran/menü önerisi (MenuBot) üretmek. Pazar analitiği raporlamalarını (DaaS) beslemek.
-
+### 🤖 Epik 3: AI MenuBot ve Sosyal Odalar
+* **Akıllı Asistan (MenuBot):** Kullanıcıların "Bugün ne yesem?", "Kadıköy'de vegan burger nerede yenir?" gibi sorularına, geleneksel anahtar kelime filtreleri yerine modern **RAG (Retrieval-Augmented Generation)** mimarisiyle cevap veren yapay zeka asistanı.
+* **Niyet Sınıflandırması (Guardrailing):** Gemini 1.5 Flash ile kullanıcının niyetinin önceden analiz edilmesi; yemek ve mekan dışı (matematik, genel kültür vb.) soruların güvenli bir şekilde engellenerek sistemin sadece amacına hizmet etmesinin sağlanması.
+* **Anlamsal Arama (Semantic Search):** Kullanıcı sorularının Gemini Embedding ile anlık olarak sayısal vektörlere dönüştürülmesi ve PostgreSQL (`pgvector`) üzerinde menü/restoran verileriyle anlam bazlı eşleştirilmesi.
+* **Bağlamsal Cevap Üretimi:** Veritabanından (veya harita servislerinden) gelen güncel mekan verilerinin, yapay zekaya "bağlam" olarak sunulup sıfır halüsinasyon (uydurma) ile %100 platformdaki gerçek mekanların önerilmesi.
+* **Grup Karar Odaları (Social Rooms):** Kullanıcıların arkadaşlarıyla ortak bir "Oda (Room)" kurarak yapay zeka önerilerini veya kendi seçtikleri restoranları oylayabildikleri, kararsızlığı ortadan kaldıran sosyal etkileşim modülü.
 ---
 
 ## 🚀 3. Temel Özellikler (Core Epics) & iOS Entegrasyonları

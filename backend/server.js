@@ -6,6 +6,7 @@ require('dotenv').config();
 const authRoutes = require('./routes/authRoutes');
 const restaurantRoutes = require('./routes/restaurantRoutes');
 const menuRoutes = require('./routes/menuRoutes');
+const menubotRoutes = require('./routes/menubotRoutes');
 const greenMenuRoutes = require('./routes/greenMenuRoutes');
 const roomRoutes = require('./routes/roomRoutes');
 
@@ -20,6 +21,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/restaurants', restaurantRoutes);
 app.use('/api/menu', menuRoutes);
+app.use('/api/menubot', menubotRoutes);
 app.use('/api/green-menu', greenMenuRoutes);
 app.use('/api/rooms', roomRoutes);
 

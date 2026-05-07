@@ -72,7 +72,10 @@ struct MainTabView: View {
                 .padding(.trailing, MenuLoTheme.Spacing.lg)
                 .padding(.bottom, 120) // TabBar ve harita butonlarının üzerine çıkması için boşluk artırıldı
                 .fullScreenCover(isPresented: $showMenuBot) {
-                    MenuBotView()
+                    // FAB'dan açılan MenuBot — restaurantId yok, genel gurme modu.
+                    // Spesifik restoran context'i için RestaurantDetailView'daki
+                    // sparkles butonunu kullan.
+                    MenuBotView(restaurantId: nil)
                 }
             }
         }

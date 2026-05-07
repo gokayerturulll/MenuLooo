@@ -18,38 +18,43 @@ struct User: Codable, Equatable, Identifiable {
     let username: String
     let email: String
     let role: String
-    
+    /// Sadece işletme (business) kullanıcıları için sahibi olduğu restoranın ID'si.
+    /// Backend login response'unda `restaurant_id` alanı varsa decode edilir, yoksa nil.
+    let restaurantId: Int?
+
     var id: Int { userId }
-    
+
     // Projedeki eski kodların (AuthViewModel, ProfileView vb.) bozulmaması için computed property'ler eklendi
     var name: String { username }
-    
+
     var userType: UserType {
         if role.lowercased() == "owner" || role.lowercased() == "admin" || role.lowercased() == "business" {
             return .business
         }
         return .customer
     }
-    
+
     enum CodingKeys: String, CodingKey {
         case userId = "user_id"
         case username, email, role
+        case restaurantId = "restaurant_id"
     }
-    
-    // Eski User(id:name:email:userType:) kullanımının hata vermemesi için özel Init:
-    init(userId: Int, username: String, email: String, role: String) {
+
+    init(userId: Int, username: String, email: String, role: String, restaurantId: Int? = nil) {
         self.userId = userId
         self.username = username
         self.email = email
         self.role = role
+        self.restaurantId = restaurantId
     }
-    
+
     // Geriye dönük uyumluluk Init:
-    init(id: Int, name: String, email: String, userType: UserType) {
+    init(id: Int, name: String, email: String, userType: UserType, restaurantId: Int? = nil) {
         self.userId = id
         self.username = name
         self.email = email
         self.role = userType == .business ? "Owner" : "Customer"
+        self.restaurantId = restaurantId
     }
 }
 
@@ -65,6 +70,7 @@ extension User {
         userId: 2,
         username: "Lezzet Durağı",
         email: "info@lezzetduragi.com",
-        role: "Owner"
+        role: "Owner",
+        restaurantId: 1
     )
 }

@@ -5,6 +5,7 @@ require('dotenv').config();
 // Route İçe Aktarımları
 const authRoutes = require('./routes/authRoutes');
 const restaurantRoutes = require('./routes/restaurantRoutes');
+const menuRoutes = require('./routes/menuRoutes');
 const greenMenuRoutes = require('./routes/greenMenuRoutes');
 const roomRoutes = require('./routes/roomRoutes');
 
@@ -18,6 +19,7 @@ app.use(express.json());
 // Rotaları Bağla
 app.use('/api/auth', authRoutes);
 app.use('/api/restaurants', restaurantRoutes);
+app.use('/api/menu', menuRoutes);
 app.use('/api/green-menu', greenMenuRoutes);
 app.use('/api/rooms', roomRoutes);
 

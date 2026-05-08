@@ -16,7 +16,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 // Konfigürasyon
 // ----------------------------------------------------------------------------
 const EMBEDDING_DIM = 3072;            // gemini-embedding-001 default boyutu
-const REQUEST_DELAY_MS = 120;         // Rate-limit'e takılmamak için ufak bekleme
+const REQUEST_DELAY_MS = 700;         // Rate-limit'e takılmamak için ufak bekleme
 const BATCH_LOG_EVERY = 10;           // Her N üründe bir özet log
 
 const pool = new Pool({

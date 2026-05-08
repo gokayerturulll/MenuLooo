@@ -1,62 +1,42 @@
 // controllers/menubotController.js
 // ============================================================================
-// MenuBot — Kurumsal RAG + Guardrail mimarisi (graceful error handling ile)
+// MenuBot — Hibrit RAG Mimarisi (Groq Chat + Gemini Embedding)
 // ----------------------------------------------------------------------------
-// Akış: Stage 1 (Intent) → Stage 2 (Vector Search) → Stage 3 (Grounded Gen)
+// Stage 1 — Intent Gate          → Groq llama-3.1-8b-instant (JSON, Decision-First)
+// Stage 2 — Embedding + Search   → Gemini gemini-embedding-001 + pgvector
+// Stage 3 — Grounded Generation  → Groq llama-3.3-70b-versatile (adres farkındalığı)
 //
-// Her Gemini API çağrısı runGeminiCall() ile sarmalanır:
-//   • 429 (kota) → 429 + "yoğunluk var, biraz sonra dene"
-//   • 503 / timeout → 503 + "sunuculara ulaşılamıyor"
-//   • diğer       → 500 + generic mesaj
-// Loglar tek satıra indirgenir; stack trace'ler terminali kirletmez.
+// Neden hibrit?
+//   • Gemini chat tarafında 503/429 sıklığı RAG akışını sürekli kesiyordu.
+//   • Groq Llama kotaları çok daha geniş + latency düşük.
+//   • Embedding tarafında DB'deki 3072d vektörler korunsun diye Gemini kalıyor;
+//     boyut değiştirmek tüm tabloyu yeniden seed etmek demektir.
+//
+// NOT: Talep edilen 'text-embedding-004' modeli artık 768d üretiyor; mevcut DB
+// 3072d (gemini-embedding-001 ile seed edilmiş) olduğu için aynı modeli koruduk.
+// İleride 768d'ye geçilecekse seed_embeddings.js'in tekrar çalıştırılması gerekir.
 // ============================================================================
 
 const pool = require('../config/db');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const Groq = require('groq-sdk');
 
 if (!process.env.GEMINI_API_KEY) {
-    console.warn("⚠️  GEMINI_API_KEY tanımlı değil — MenuBot endpoint'i hata dönecek.");
+    console.warn("⚠️  GEMINI_API_KEY tanımlı değil — embedding stage başarısız olacak.");
+}
+if (!process.env.GROQ_API_KEY) {
+    console.warn("⚠️  GROQ_API_KEY tanımlı değil — intent ve generation stage başarısız olacak.");
 }
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-
-// ─── Modeller ────────────────────────────────────────────────────────────────
-
-const intentModel = genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
-    // maxOutputTokens 5 → 20: model bazen "EVET"/"HAYIR"'ı tek tokende veremiyor,
-    // yarım kelime ("EV", "H") dönüyordu. 20 token rahat fazlasıyla yetiyor.
-    generationConfig: { temperature: 0, maxOutputTokens: 20 }
-});
-
 const embeddingModel = genAI.getGenerativeModel({ model: 'gemini-embedding-001' });
 
-const answerModel = genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
-    systemInstruction: {
-        role: 'system',
-        parts: [{
-            text:
-                "Sen MenuLo'nun uzman, nazik ve profesyonel yemek asistanısın. " +
-                "SANA VERİLEN VERİTABANI İÇERİĞİ DIŞINDA BİLGİ UYDURMA. " +
-                "Kullanıcıya bütçesi, diyeti veya konumu doğrultusunda en iyi seçenekleri sun " +
-                "veya restoran hakkındaki sorularını cevapla. " +
-                "Yanıtların samimi, akıcı ve 2-4 cümle olsun; ürün önerirken fiyatlarını mutlaka belirt. " +
-                "Asla 'elimde bilgi yok, internete bakayım' gibi cümleler kurma — yalnızca sana verilen menü bilgileriyle konuş. " +
-
-                // Adres / Semt farkındalığı
-                "ADRES FARKINDALIĞI: Sana verilen menü bilgilerindeki 'Adres' alanlarını dikkatlice incele. " +
-                "Eğer kullanıcı belirli bir semtten (örn. 'Ataşehir', 'Kadıköy', 'Üsküdar', 'Maltepe') bahsediyorsa, " +
-                "SADECE o semtte adresi geçen restoranları öner; başka semtlerdeki yerleri bu öneriye dahil etme. " +
-                "Eğer sorulan semte ait hiçbir veri yoksa, dürüstçe belirt ve elindeki diğer semtlerden alternatif sun. " +
-                "Örnek: 'O semtte şu an bir mekanım yok ama Kadıköy'deki Moda Burger güzel bir seçenek olabilir.' " +
-                "Asla bir restoranı yanlış semtte göstermeye çalışma, sahte adres uydurma."
-        }]
-    },
-    generationConfig: { temperature: 0.7 }
-});
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || '' });
 
 // ─── Sabitler ────────────────────────────────────────────────────────────────
+
+const INTENT_MODEL = 'llama-3.1-8b-instant';
+const ANSWER_MODEL = 'llama-3.3-70b-versatile';
 
 const TOP_K = 6;
 const MAX_MESSAGE_LEN = 1000;
@@ -69,13 +49,26 @@ const ERROR_MESSAGES = {
     unknown: 'Yanıt üretilirken sistemsel bir hata oluştu. Lütfen tekrar deneyin.',
 };
 
+const ANSWER_SYSTEM_PROMPT =
+    "Sen MenuLo'nun uzman, nazik ve profesyonel yemek asistanısın. " +
+    "SANA VERİLEN VERİTABANI İÇERİĞİ DIŞINDA BİLGİ UYDURMA. " +
+    "Kullanıcıya bütçesi, diyeti veya konumu doğrultusunda en iyi seçenekleri sun " +
+    "veya restoran hakkındaki sorularını cevapla. " +
+    "Yanıtların samimi, akıcı ve 2-4 cümle olsun; ürün önerirken fiyatlarını mutlaka belirt. " +
+    "Asla 'elimde bilgi yok, internete bakayım' gibi cümleler kurma — yalnızca sana verilen menü bilgileriyle konuş. " +
+    "ADRES FARKINDALIĞI: Sana verilen menü bilgilerindeki 'Adres' alanlarını dikkatlice incele. " +
+    "Eğer kullanıcı belirli bir semtten (örn. 'Ataşehir', 'Kadıköy', 'Üsküdar', 'Maltepe') bahsediyorsa, " +
+    "SADECE o semtte adresi geçen restoranları öner; başka semtlerdeki yerleri bu öneriye dahil etme. " +
+    "Eğer sorulan semte ait hiçbir veri yoksa, dürüstçe belirt ve elindeki diğer semtlerden alternatif sun. " +
+    "Örnek: 'Şu an o bölgede mekanım yok ama Kadıköy'deki Moda Burger güzel bir seçenek olabilir.' " +
+    "Asla bir restoranı yanlış semtte göstermeye çalışma, sahte adres uydurma.";
+
 // ─── Hata Yönetimi Helper'ları ───────────────────────────────────────────────
 
-/** Gemini SDK hatasından HTTP status code'u çıkarır. */
 function extractStatus(err) {
     if (typeof err?.status === 'number') return err.status;
     if (typeof err?.statusCode === 'number') return err.statusCode;
-    // Mesaj formatı: "[GoogleGenerativeAI Error]: ... [429 Too Many Requests] ..."
+    if (typeof err?.response?.status === 'number') return err.response.status;
     const match = String(err?.message || '').match(/\b(429|500|502|503|504)\b/);
     return match ? parseInt(match[1], 10) : null;
 }
@@ -86,12 +79,10 @@ function isTimeoutError(err) {
     return ['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'ENETUNREACH'].includes(err?.code);
 }
 
-/** Hatayı user-facing kategoriye + mesaja eşler. */
 function classifyAIError(err) {
     const status = extractStatus(err);
-
     if (status === 429) {
-        return { category: 'quota',       status: 429, userMessage: ERROR_MESSAGES.quota };
+        return { category: 'quota', status: 429, userMessage: ERROR_MESSAGES.quota };
     }
     if (status === 503 || status === 504 || isTimeoutError(err)) {
         return { category: 'unavailable', status: 503, userMessage: ERROR_MESSAGES.unavailable };
@@ -99,7 +90,6 @@ function classifyAIError(err) {
     return { category: 'unknown', status: 500, userMessage: ERROR_MESSAGES.unknown };
 }
 
-/** Tek satırlık temiz log. Stack trace yutulur. */
 function logAIError(stage, err) {
     const status = extractStatus(err) ?? 'no-status';
     const firstLine = String(err?.message || err || 'unknown').split('\n')[0].slice(0, 220);
@@ -107,11 +97,7 @@ function logAIError(stage, err) {
     console.error(`[MenuBot Error] ${stage} · ${status}${code} · ${firstLine}`);
 }
 
-/**
- * Bir Gemini call'unu güvenli şekilde çalıştırır.
- * Hata yakalanırsa kısa loglar ve `aiClassified` markup'ı ile re-throw eder.
- */
-async function runGeminiCall(stage, fn) {
+async function runAICall(stage, fn) {
     try {
         return await fn();
     } catch (err) {
@@ -123,69 +109,126 @@ async function runGeminiCall(stage, fn) {
     }
 }
 
-// ─── Stage 1: Intent Classification (fail-open) ──────────────────────────────
+// ─── Stage 1: Intent Classification (Groq, Decision-First JSON, fail-open) ──
 
 async function isFoodRelated(message) {
-    // Few-shot prompting: model ne üreteceğini örnekler üzerinden öğrenir.
-    // Her örnek için sadece "EVET" / "HAYIR" çıktısı bekleniyor — bu pattern
-    // sayesinde model kendi yanıtını da aynı formatta verir, boş string
-    // veya yarım kelime dönüşleri minimize edilir.
-    const prompt =
-`Görev: Verilen cümlenin yemek, restoran, menü, tarif veya sipariş ile ilgili olup olmadığını analiz et. SADECE 'EVET' veya 'HAYIR' yaz.
+    const systemPrompt =
+        "Sen bir MenuLo Gurme Asistanı'nın kapı görevlisisin. MenuLo bir RESTORAN ve MENÜ " +
+        "tavsiye uygulamasıdır; bu yüzden kullanıcının cümleleri çoğunlukla yemek bağlamındadır. " +
+        "Verilen cümlenin yemek, restoran, menü, tarif, içecek, sipariş veya bu sohbetin doğal " +
+        "akışı ile ilgili olup olmadığına karar verirsin. " +
+        "ÇIKTI olarak SADECE şu yapıda bir JSON döndür (Decision-First — önce karar, sonra analiz): " +
+        '{ "karar": "EVET" veya "HAYIR", "analiz": "Kısa Türkçe gerekçe" } ' +
+        "Başka hiçbir metin, açıklama veya markdown ekleme. " +
 
-Örnekler:
-Cümle: "2+2 kaç eder?"
-Cevap: HAYIR
+        // Nezaket / sohbet ifadeleri istisnası
+        "ÖNEMLİ İSTİSNA 1 (Nezaket): Kullanıcının 'Selam', 'Merhaba', 'Günaydın', 'İyi akşamlar', " +
+        "'Teşekkürler', 'Eline sağlık', 'Sağ ol', 'Tamam', 'Anladım' gibi temel sohbet " +
+        "başlatıcı (greetings) veya bitirici nezaket ifadelerini DOĞRUDAN REDDETME. " +
+        "Bunları doğal sohbet akışının bir parçası kabul et ve karar alanına 'EVET' yazarak " +
+        "geçişlerine izin ver. Yemek asistanı da bir insan gibi selamlaşmalı, teşekkürlere " +
+        "kibarca karşılık verebilmelidir. " +
 
-Cümle: "Kadıköy'de burgerci öner"
-Cevap: EVET
+        // Lokasyon ve takip cümlesi varsayımı
+        "ÖNEMLİ İSTİSNA 2 (Gurme Uygulaması Varsayımı): MenuLo bir restoran asistanı olduğu için, " +
+        "kullanıcı 'Bostancı'da nereler var?', 'Şurada ne var?', 'Yakında bir şey var mı?' gibi " +
+        "ucu açık LOKASYON sorularını sorduğunda, bunun bir RESTORAN/MEKAN arayışı olduğunu " +
+        "VARSAY ve EVET dön. " +
+        "Ayrıca 'Kadıköy'de olmasına gerek yok', 'Fark etmez', 'Başka yer de olur', " +
+        "'Daha ucuzu var mı', 'Başka önerin var mı' gibi önceki bir sohbetin DEVAMI niteliğindeki " +
+        "(follow-up) kısa cümleleri doğrudan yemek sohbeti kabul et ve KESİNLİKLE REDDETME — " +
+        "her zaman EVET dön. Bu kısa cümleler bağlamdan kopuk gibi görünse bile MenuLo akışında " +
+        "her zaman bir restoran tavsiyesinin devamıdır.";
 
-Cümle: "Bana python kodu yaz"
-Cevap: HAYIR
+    const fewShotExamples = [
+        { user: '2+2 kaç eder?',                        out: { karar: 'HAYIR', analiz: 'Matematik sorusu, yemekle ilgisi yok.' } },
+        { user: 'Kadıköy\'de burgerci öner',            out: { karar: 'EVET',  analiz: 'Kullanıcı semt bazlı burger restoranı arıyor.' } },
+        { user: 'Bana python kodu yaz',                 out: { karar: 'HAYIR', analiz: 'Kod yazma talebi, gastronomi dışı.' } },
+        { user: 'Anadolu yakasında tatlı kahve nerede', out: { karar: 'EVET',  analiz: 'Konum bazlı kafe/tatlı tavsiyesi sorusu.' } },
+        { user: 'Vegan menü var mı acaba',              out: { karar: 'EVET',  analiz: 'Diyet bazlı menü filtreleme talebi.' } },
+        { user: 'Merhaba',                              out: { karar: 'EVET',  analiz: 'Kullanıcı selam veriyor, sohbet başlatmak için izin verilmeli.' } },
+        { user: 'Teşekkür ederim çok yardımcı oldun',   out: { karar: 'EVET',  analiz: 'Kullanıcı teşekkür ediyor, nezaket ifadesi, izin verilmeli.' } },
+        { user: 'Kadıköyde olmasına gerek yok',         out: { karar: 'EVET',  analiz: 'Lokasyon tercihini değiştiren bir takip cümlesi, sohbet devamı.' } },
+        { user: 'Bostancıda nereler var',               out: { karar: 'EVET',  analiz: 'Bir yemek uygulamasında semt soruluyorsa, restoran soruluyordur.' } },
+        { user: 'Fark etmez orası da olur',             out: { karar: 'EVET',  analiz: 'Önceki bir yemek tavsiyesine onay veren takip cümlesi.' } },
+    ];
 
-Cümle: "Pizza nerede yenir"
-Cevap: EVET
+    const fewShotText = fewShotExamples
+        .map(ex => `Cümle: "${ex.user}"\nCevap: ${JSON.stringify(ex.out)}`)
+        .join('\n\n');
 
-Cümle: "${message.trim()}"
-Cevap:`;
+    const userPrompt =
+        `Aşağıdaki örneklere göre, en sondaki cümlenin yemekle ilgili olup olmadığına karar ver.\n\n` +
+        `${fewShotText}\n\n` +
+        `Cümle: "${message.trim()}"\nCevap:`;
 
     try {
-        const result = await intentModel.generateContent(prompt);
-        const responseText = result?.response?.text() || '';
+        const completion = await groq.chat.completions.create({
+            model: INTENT_MODEL,
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user',   content: userPrompt }
+            ],
+            response_format: { type: 'json_object' },
+            temperature: 0.1,
+            max_tokens: 200,
+        });
 
-        // Gelişmiş temizleme: yanıtı sadece harflere indir, boşluk/noktalama/
-        // görünmez Unicode karakterleri (zero-width space, BOM vb.) at.
-        // Türkçe karakterler korunur.
-        const cleanIntent = responseText
-            .replace(/[^a-zA-ZçğıöşüÇĞİıÖŞÜ]/g, '')
-            .toUpperCase();
+        const responseText = completion?.choices?.[0]?.message?.content || '';
+        let isRelated = false;
+        let analiz = null;
+        let karar = null;
+        let parseStatus = 'parsed';
 
-        // Kesin kontrol: tam "EVET" var mı, ya da kesilmiş "EV" tek başına
-        // mı geldi (===). "HAYIR"ın hiçbir prefix'i ('H', 'HA', 'HAY', 'HAYI',
-        // 'HAYIR') 'EV' alt-string'i içermediği için false-positive yok.
-        const isRelated = cleanIntent.includes('EVET') || cleanIntent === 'EV';
+        try {
+            const parsed = JSON.parse(responseText);
+            karar = String(parsed?.karar ?? '').toUpperCase().trim();
+            analiz = parsed?.analiz ?? null;
+            isRelated = karar.includes('EVET');
+        } catch (jsonErr) {
+            // Truncation handling — JSON yarım kesilmiş olabilir.
+            // Regex ile kelime aramıyoruz; JSON YAPISI'nı yakalıyoruz:
+            //   "karar": "EVET" / "karar":"EVET" / "karar"  :  "evet"
+            parseStatus = 'truncated';
+            const yesPattern = /"karar"\s*:\s*"\s*EVET\s*"/i;
+            const noPattern  = /"karar"\s*:\s*"\s*HAYIR\s*"/i;
 
-        // Debug log'ları
+            if (yesPattern.test(responseText)) {
+                isRelated = true;
+                karar = 'EVET (truncated-recovery)';
+            } else if (noPattern.test(responseText)) {
+                isRelated = false;
+                karar = 'HAYIR (truncated-recovery)';
+            } else {
+                // JSON yapısı bile bulunamadı — fail-open
+                isRelated = true;
+                karar = '(yapı yakalanamadı, fail-open)';
+                parseStatus = 'unrecoverable';
+            }
+        }
+
+        // ── Debug log ──
         console.log('Gelen Soru:', message);
-        console.log('Intent Modelinin Ham Cevabı:', responseText);
-        console.log('Temizlenmiş Cevap:', cleanIntent || '(boş)');
-        console.log('Karar:', isRelated ? 'GEÇİŞ ONAYLANDI' : 'REDDEDİLDİ');
+        console.log('Intent (Groq) Ham Cevap:', responseText);
+        console.log('Parse Durumu:', parseStatus);
+        if (analiz) console.log('Analiz:', analiz);
+        console.log('Karar:', karar || '(yok)');
+        console.log('Final Karar:', isRelated ? 'GEÇİŞ ONAYLANDI' : 'REDDEDİLDİ');
 
         return isRelated;
     } catch (err) {
-        // Fail-open: classifier düşerse kullanıcıyı bloke etme, RAG'a düş.
+        // Fail-open: Groq tamamen çökse bile guard mesajı yapıştırma — RAG'a düş.
         logAIError('intent-classifier (fail-open)', err);
         return true;
     }
 }
 
-// ─── Stage 2: Embedding + Vector Search ──────────────────────────────────────
+// ─── Stage 2: Embedding + Vector Search (Gemini + pgvector) ─────────────────
 
 async function embedQuery(text) {
-    const result = await runGeminiCall('embedding', () => embeddingModel.embedContent(text));
+    const result = await runAICall('embedding', () => embeddingModel.embedContent(text));
     const values = result?.embedding?.values;
     if (!Array.isArray(values) || values.length === 0) {
-        // Gemini OK döndü ama vektör boş — generic 500 olarak ele al
         const err = new Error('Soru embedding üretilemedi.');
         err.aiClassified = { category: 'unknown', status: 500, userMessage: ERROR_MESSAGES.unknown };
         throw err;
@@ -234,15 +277,12 @@ async function searchAllRestaurants(vectorLiteral) {
     return rows;
 }
 
-// ─── Stage 3: Grounded Generation ────────────────────────────────────────────
+// ─── Stage 3: Grounded Generation (Groq llama-3.3-70b-versatile) ────────────
 
-function buildContextBlock(items /* , mode */) {
+function buildContextBlock(items) {
     if (items.length === 0) {
         return 'Veritabanında ilgili menü öğesi bulunamadı.';
     }
-    // Zengin format — modelin adres farkındalığı kazanması için her satırda
-    // restoran adı + adres + yemek + fiyat + açıklama açıkça yer alır.
-    // Stage 3 (Şef) bu blokta semt eşleştirmesi yapabilsin.
     return items.map((it, i) => {
         const parts = [
             `Restoran: ${it.restaurant_name}`,
@@ -257,7 +297,7 @@ function buildContextBlock(items /* , mode */) {
 }
 
 async function generateGroundedAnswer({ message, items, mode, restaurantName }) {
-    const contextBlock = buildContextBlock(items, mode);
+    const contextBlock = buildContextBlock(items);
 
     const userPrompt = mode === 'specific'
         ? `Restoran: ${restaurantName}\n\n` +
@@ -266,11 +306,20 @@ async function generateGroundedAnswer({ message, items, mode, restaurantName }) 
         : `Genel gurme modu — tüm restoranların menüsünden alaka skorlarına göre çekilen öğeler:\n${contextBlock}\n\n` +
           `Müşterinin sorusu: "${message.trim()}"`;
 
-    const completion = await runGeminiCall(
+    const completion = await runAICall(
         'answer-generation',
-        () => answerModel.generateContent(userPrompt)
+        () => groq.chat.completions.create({
+            model: ANSWER_MODEL,
+            messages: [
+                { role: 'system', content: ANSWER_SYSTEM_PROMPT },
+                { role: 'user',   content: userPrompt }
+            ],
+            temperature: 0.7,
+            max_tokens: 600,
+        })
     );
-    return (completion?.response?.text() || '').trim();
+
+    return (completion?.choices?.[0]?.message?.content || '').trim();
 }
 
 // ─── Endpoint ────────────────────────────────────────────────────────────────
@@ -280,7 +329,6 @@ exports.ask = async (req, res) => {
     try {
         const { restaurantId, message } = req.body;
 
-        // Mesaj validation
         if (typeof message !== 'string' || message.trim().length === 0) {
             return res.status(400).json({ success: false, message: 'Boş bir mesaj gönderemezsiniz.' });
         }
@@ -291,7 +339,6 @@ exports.ask = async (req, res) => {
             });
         }
 
-        // restaurantId opsiyonel: varsa specific, yoksa general mode
         let rid = null;
         if (restaurantId !== undefined && restaurantId !== null) {
             const parsed = typeof restaurantId === 'number'
@@ -313,7 +360,7 @@ exports.ask = async (req, res) => {
             restaurantName = r.rows[0].business_name;
         }
 
-        // ─ STAGE 1: Intent Gate ────────────────────────────────────────────
+        // ─ STAGE 1: Intent Gate (fail-open) ────────────────────────────────
         const onTopic = await isFoodRelated(message);
         if (!onTopic) {
             return res.status(200).json({
@@ -333,7 +380,7 @@ exports.ask = async (req, res) => {
             ? await searchSpecificRestaurant(rid, vectorLiteral)
             : await searchAllRestaurants(vectorLiteral);
 
-        // ─ STAGE 3: Grounded Generation ────────────────────────────────────
+        // ─ STAGE 3: Grounded Generation (Groq Llama 3.3 70B) ───────────────
         const answer = await generateGroundedAnswer({
             message, items, mode, restaurantName
         });
@@ -360,14 +407,12 @@ exports.ask = async (req, res) => {
             }
         });
     } catch (err) {
-        // Stage 2/3 helper'larından gelen sınıflandırılmış hatalar
         if (err?.aiClassified) {
             return res.status(err.aiClassified.status).json({
                 success: false,
                 message: err.aiClassified.userMessage
             });
         }
-        // Beklenmedik hata (DB / kod / vb.) — temiz tek satır log + generic 500
         const firstLine = String(err?.message || err).split('\n')[0].slice(0, 220);
         console.error(`[MenuBot Error] endpoint · 500 · ${firstLine}`);
         return res.status(500).json({ success: false, message: ERROR_MESSAGES.unknown });

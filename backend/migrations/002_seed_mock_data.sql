@@ -12,15 +12,15 @@ TRUNCATE TABLE "user" RESTART IDENTITY CASCADE;
 
 -- 2. Insert Users (1 Admin, 3 Owners, 5 Customers)
 INSERT INTO "user" (role, username, email, phone_number, password_hash, location) VALUES
-('Admin',    'admin_user',    'admin@menulo.com',         '+905550000001', 'hash_placeholder', ST_SetSRID(ST_MakePoint(29.02, 40.99), 4326)),
-('Owner',    'owner_ahmet',   'ahmet@restaurant.com',     '+905550000002', 'hash_placeholder', ST_SetSRID(ST_MakePoint(29.03, 40.98), 4326)),
-('Owner',    'owner_ayse',    'ayse@restaurant.com',      '+905550000003', 'hash_placeholder', ST_SetSRID(ST_MakePoint(29.10, 40.97), 4326)),
-('Owner',    'owner_mehmet',  'mehmet@restaurant.com',    '+905550000004', 'hash_placeholder', ST_SetSRID(ST_MakePoint(29.05, 41.00), 4326)),
-('Customer', 'cust_ali',      'ali@gmail.com',            '+905550000005', 'hash_placeholder', ST_SetSRID(ST_MakePoint(29.025, 40.985), 4326)),
-('Customer', 'cust_zeynep',   'zeynep@gmail.com',         '+905550000006', 'hash_placeholder', ST_SetSRID(ST_MakePoint(29.09, 40.96), 4326)),
-('Customer', 'cust_can',      'can@gmail.com',            '+905550000007', 'hash_placeholder', ST_SetSRID(ST_MakePoint(29.04, 40.99), 4326)),
-('Customer', 'cust_elif',     'elif@gmail.com',           '+905550000008', 'hash_placeholder', ST_SetSRID(ST_MakePoint(29.11, 40.975), 4326)),
-('Customer', 'cust_burak',    'burak@gmail.com',          '+905550000009', 'hash_placeholder', ST_SetSRID(ST_MakePoint(29.01, 41.01), 4326));
+('Admin',    'admin_user',    'admin@menulo.com',         '+905550000001', '$2b$10$CF5NV5VqtQRL8UszJPpmn.0zb3sJt9Kcee3UJKhuQcEFqA7.Ht9my', ST_SetSRID(ST_MakePoint(29.02, 40.99), 4326)),
+('Owner',    'owner_ahmet',   'ahmet@restaurant.com',     '+905550000002', '$2b$10$CF5NV5VqtQRL8UszJPpmn.0zb3sJt9Kcee3UJKhuQcEFqA7.Ht9my', ST_SetSRID(ST_MakePoint(29.03, 40.98), 4326)),
+('Owner',    'owner_ayse',    'ayse@restaurant.com',      '+905550000003', '$2b$10$CF5NV5VqtQRL8UszJPpmn.0zb3sJt9Kcee3UJKhuQcEFqA7.Ht9my', ST_SetSRID(ST_MakePoint(29.10, 40.97), 4326)),
+('Owner',    'owner_mehmet',  'mehmet@restaurant.com',    '+905550000004', '$2b$10$CF5NV5VqtQRL8UszJPpmn.0zb3sJt9Kcee3UJKhuQcEFqA7.Ht9my', ST_SetSRID(ST_MakePoint(29.05, 41.00), 4326)),
+('Customer', 'cust_ali',      'ali@gmail.com',            '+905550000005', '$2b$10$CF5NV5VqtQRL8UszJPpmn.0zb3sJt9Kcee3UJKhuQcEFqA7.Ht9my', ST_SetSRID(ST_MakePoint(29.025, 40.985), 4326)),
+('Customer', 'cust_zeynep',   'zeynep@gmail.com',         '+905550000006', '$2b$10$CF5NV5VqtQRL8UszJPpmn.0zb3sJt9Kcee3UJKhuQcEFqA7.Ht9my', ST_SetSRID(ST_MakePoint(29.09, 40.96), 4326)),
+('Customer', 'cust_can',      'can@gmail.com',            '+905550000007', '$2b$10$CF5NV5VqtQRL8UszJPpmn.0zb3sJt9Kcee3UJKhuQcEFqA7.Ht9my', ST_SetSRID(ST_MakePoint(29.04, 40.99), 4326)),
+('Customer', 'cust_elif',     'elif@gmail.com',           '+905550000008', '$2b$10$CF5NV5VqtQRL8UszJPpmn.0zb3sJt9Kcee3UJKhuQcEFqA7.Ht9my', ST_SetSRID(ST_MakePoint(29.11, 40.975), 4326)),
+('Customer', 'cust_burak',    'burak@gmail.com',          '+905550000009', '$2b$10$CF5NV5VqtQRL8UszJPpmn.0zb3sJt9Kcee3UJKhuQcEFqA7.Ht9my', ST_SetSRID(ST_MakePoint(29.01, 41.01), 4326));
 
 -- 3. Insert Restaurants (50 — Anadolu + Avrupa Yakası, çeşitli konseptler)
 INSERT INTO restaurant (owner_id, business_name, address, location_point, work_hours) VALUES

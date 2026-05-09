@@ -59,7 +59,7 @@ class NetworkManager {
     //private let baseURL = "http://localhost:3000/api"
     private let baseURL = "https://utopia-simmering-mandolin.ngrok-free.dev/api" 
     //private let baseURL = "http://10.81.21.76/api"
-    @AppStorage("authToken") private var token: String = ""
+    private var token: String { KeychainHelper.load(forKey: "authToken") ?? "" }
     
     private init() {}
     

@@ -170,11 +170,11 @@ exports.createMenuItem = async (req, res) => {
         const inserted = await pool.query(`
             INSERT INTO menu_item (category_id, name, price, description, is_green_menu, is_available)
             VALUES ($1, $2, $3, $4, COALESCE($5, FALSE), COALESCE($6, TRUE))
-            RETURNING item_id, name, price::float AS price, description, is_green_menu, is_available, image_url, category_id
+            RETURNING item_id, name, price::float AS price, description, is_green_menu, is_available, image_url,
+                      (SELECT name FROM category WHERE category_id = $1) AS category
         `, [categoryId, name, price, description || null, is_green_menu, is_available]);
 
         const row = inserted.rows[0];
-        row.category = (await pool.query('SELECT name FROM category WHERE category_id = $1', [row.category_id])).rows[0]?.name;
 
         res.status(201).json({
             success: true,
@@ -219,7 +219,8 @@ exports.updateMenuItem = async (req, res) => {
                 is_green_menu = COALESCE($5, is_green_menu),
                 is_available  = COALESCE($6, is_available)
             WHERE item_id = $7
-            RETURNING item_id, name, price::float AS price, description, is_green_menu, is_available, image_url, category_id
+            RETURNING item_id, name, price::float AS price, description, is_green_menu, is_available, image_url,
+                      (SELECT name FROM category WHERE category_id = $4) AS category
         `, [
             name ?? null,
             price ?? null,
@@ -231,7 +232,6 @@ exports.updateMenuItem = async (req, res) => {
         ]);
 
         const row = updated.rows[0];
-        row.category = (await pool.query('SELECT name FROM category WHERE category_id = $1', [row.category_id])).rows[0]?.name;
 
         res.status(200).json({
             success: true,

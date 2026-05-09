@@ -24,10 +24,12 @@ exports.authMiddleware = (req, res, next) => {
     const token = authHeader.split(' ')[1];
 
     try {
-        const decoded = jwt.verify(
-            token,
-            process.env.JWT_SECRET || 'fallback_secret_key'
-        );
+        const secret = process.env.JWT_SECRET;
+        if (!secret) {
+            console.error('[FATAL] JWT_SECRET is not set — cannot verify token.');
+            return res.status(500).json({ success: false, message: 'Sunucu yapılandırma hatası.' });
+        }
+        const decoded = jwt.verify(token, secret);
         // { user_id, role, iat, exp }
         req.user = decoded;
         next();

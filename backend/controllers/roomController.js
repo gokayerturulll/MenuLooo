@@ -2,12 +2,11 @@ const pool = require('../config/db');
 
 exports.joinRoom = async (req, res) => {
     try {
-        // user_id normalde JWT auth middleware üzerinden req.user'dan gelir,
-        // şimdilik test kolaylığı için body'den alıyoruz.
-        const { qr_code, user_id, individual_preferences } = req.body;
-        
-        if (!qr_code || !user_id) {
-            return res.status(400).json({ success: false, message: 'qr_code ve user_id bilgileri zorunludur.' });
+        const { qr_code, individual_preferences } = req.body;
+        const user_id = req.user.user_id;
+
+        if (!qr_code) {
+            return res.status(400).json({ success: false, message: 'qr_code bilgisi zorunludur.' });
         }
         
         // QR koda ait odayı bul

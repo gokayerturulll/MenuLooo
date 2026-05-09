@@ -96,7 +96,9 @@ class AuthViewModel: ObservableObject {
                         return
                     }
 
-                    UserDefaults.standard.set(response.token, forKey: "authToken")
+                    if let token = response.token {
+                        KeychainHelper.save(token, forKey: "authToken")
+                    }
                     self.currentUser = user
                     self.isAuthenticated = true
                 } else {
@@ -110,7 +112,7 @@ class AuthViewModel: ObservableObject {
             self.isLoading = false
         }
     }
-    
+
     // MARK: - Kayıt (Register)
     
     /// Yeni kullanıcı kaydı oluşturur.
@@ -139,7 +141,9 @@ class AuthViewModel: ObservableObject {
                     // Kayıt başarılı, arka planda hemen login yapalım:
                     let loginResp = try await NetworkManager.shared.login(email: email, password: password)
                     if loginResp.success, let user = loginResp.user {
-                        UserDefaults.standard.set(loginResp.token, forKey: "authToken")
+                        if let token = loginResp.token {
+                            KeychainHelper.save(token, forKey: "authToken")
+                        }
                         self.currentUser = user
                         self.isAuthenticated = true
                     } else {
@@ -162,7 +166,7 @@ class AuthViewModel: ObservableObject {
     
     /// Kullanıcı oturumunu sonlandırır.
     func logout() {
-        // TODO: Keychain'den token silme (Aşama 2'de)
+        KeychainHelper.delete(forKey: "authToken")
         currentUser = nil
         isAuthenticated = false
     }

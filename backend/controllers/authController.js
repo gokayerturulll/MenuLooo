@@ -4,12 +4,15 @@ const pool = require('../config/db');
 
 exports.register = async (req, res) => {
     try {
-        const { username, email, password, role } = req.body;
-        
+        const { username, email, password, role: rawRole } = req.body;
+
         // Gerekli alanların kontrolü
         if (!username || !email || !password) {
             return res.status(400).json({ success: false, message: 'Lütfen kullanıcı adı, email ve şifre giriniz.' });
         }
+
+        const ALLOWED_REGISTER_ROLES = ['Customer', 'Owner'];
+        const role = ALLOWED_REGISTER_ROLES.includes(rawRole) ? rawRole : 'Customer';
         
         // Kullanıcı daha önce kayıtlı mı?
         const userCheck = await pool.query('SELECT * FROM "user" WHERE email = $1', [email]);
@@ -54,22 +57,20 @@ exports.login = async (req, res) => {
         
         const user = result.rows[0];
         
-        // Şifre kontrolü (Eski mock veriler için 'test' şifresiyle geçici giriş izni)
-        let isMatch = false;
-        if (user.password_hash === 'hash_placeholder' && password === 'test') {
-            isMatch = true;
-        } else {
-            isMatch = await bcrypt.compare(password, user.password_hash);
-        }
+        const isMatch = await bcrypt.compare(password, user.password_hash);
         
         if (!isMatch) {
             return res.status(401).json({ success: false, message: 'E-posta veya şifre hatalı.' });
         }
         
         // JWT Oluştur
+        if (!process.env.JWT_SECRET) {
+            console.error('[FATAL] JWT_SECRET is not set — refusing to sign token.');
+            return res.status(500).json({ success: false, message: 'Sunucu yapılandırma hatası.' });
+        }
         const token = jwt.sign(
             { user_id: user.user_id, role: user.role },
-            process.env.JWT_SECRET || 'fallback_secret_key',
+            process.env.JWT_SECRET,
             { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
         );
 

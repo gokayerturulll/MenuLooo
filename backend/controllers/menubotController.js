@@ -35,6 +35,14 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || '' });
 
 // ─── Sabitler ────────────────────────────────────────────────────────────────
 
+/** Prompt şablonlarına gömülecek mesajlardan kontrol karakterlerini ve tırnak işaretlerini temizler. */
+function sanitizeForPrompt(text) {
+    return text
+        .replace(/[\x00-\x1F\x7F]/g, ' ') // kontrol karakterleri
+        .replace(/"/g, '\\"')               // çift tırnak escape
+        .replace(/`/g, "'");               // backtick → single quote
+}
+
 const INTENT_MODEL = 'llama-3.1-8b-instant';
 const ANSWER_MODEL = 'llama-3.3-70b-versatile';
 
@@ -161,7 +169,7 @@ async function isFoodRelated(message) {
     const userPrompt =
         `Aşağıdaki örneklere göre, en sondaki cümlenin yemekle ilgili olup olmadığına karar ver.\n\n` +
         `${fewShotText}\n\n` +
-        `Cümle: "${message.trim()}"\nCevap:`;
+        `Cümle: "${sanitizeForPrompt(message.trim())}"\nCevap:`;
 
     try {
         const completion = await groq.chat.completions.create({
@@ -300,12 +308,13 @@ function buildContextBlock(items) {
 async function generateGroundedAnswer({ message, items, mode, restaurantName }) {
     const contextBlock = buildContextBlock(items);
 
+    const safeMessage = sanitizeForPrompt(message.trim());
     const userPrompt = mode === 'specific'
         ? `Restoran: ${restaurantName}\n\n` +
           `İlgili menü öğeleri (alaka sırasına göre):\n${contextBlock}\n\n` +
-          `Müşterinin sorusu: "${message.trim()}"`
+          `Müşterinin sorusu: "${safeMessage}"`
         : `Genel gurme modu — tüm restoranların menüsünden alaka skorlarına göre çekilen öğeler:\n${contextBlock}\n\n` +
-          `Müşterinin sorusu: "${message.trim()}"`;
+          `Müşterinin sorusu: "${safeMessage}"`;
 
     const completion = await runAICall(
         'answer-generation',

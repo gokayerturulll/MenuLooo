@@ -14,7 +14,22 @@ const roomRoutes = require('./routes/roomRoutes');
 const app = express();
 
 // Middleware'ler
-app.use(cors());
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map(o => o.trim())
+    .filter(Boolean);
+
+app.use(cors({
+    origin: ALLOWED_ORIGINS.length > 0
+        ? (origin, cb) => {
+            // ngrok / mobil istemciler origin göndermeyebilir
+            if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+            cb(new Error(`CORS: ${origin} izin listesinde değil.`));
+          }
+        : false,
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+}));
 app.use(express.json());
 
 // Rotaları Bağla

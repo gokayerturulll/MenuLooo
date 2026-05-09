@@ -17,6 +17,10 @@ struct RestaurantDetailView: View {
     @State private var selectedCategory: String? = nil
     @State private var showMenuBot: Bool = false
 
+    /// Restoranın description, telefon, çalışma saatleri gibi zengin alanları bu
+    /// modelde geliyor (Restaurant minimal — header'daki tanıtım için bunu çekiyoruz).
+    @State private var detail: RestaurantDetail? = nil
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -89,14 +93,17 @@ struct RestaurantDetailView: View {
                 // Spesifik restoran context'i — MenuBot sadece bu restoranın menüsünde arar
                 MenuBotView(restaurantId: restaurant.id)
             }
-            .task { await loadMenu() }
+            .task {
+                await loadMenu()
+                await loadDetail()
+            }
         }
     }
 
     // MARK: - Subsections
 
     private var headerSection: some View {
-        VStack(alignment: .leading, spacing: MenuLoTheme.Spacing.xs) {
+        VStack(alignment: .leading, spacing: MenuLoTheme.Spacing.sm) {
             HStack {
                 Text(restaurant.emoji)
                     .font(.system(size: 48))
@@ -123,6 +130,17 @@ struct RestaurantDetailView: View {
             }
             .padding(.horizontal)
 
+            // İsmin altında, mekanın ruhunu özetleyen tanıtım metni.
+            if let description = detail?.description, !description.isEmpty {
+                Text(description)
+                    .font(MenuLoTheme.Fonts.body)
+                    .foregroundColor(.secondary)
+                    .lineLimit(3)
+                    .lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal)
+            }
+
             HStack(spacing: MenuLoTheme.Spacing.md) {
                 DetailBadge(iconName: "fork.knife", text: restaurant.cuisine)
                 DetailBadge(iconName: "star.fill",
@@ -130,6 +148,38 @@ struct RestaurantDetailView: View {
                             iconColor: .yellow)
             }
             .padding(.horizontal)
+
+            // Apple HIG'de standart "disclosure row" pattern'i: tıklanabilir satır,
+            // sağda chevron, ReviewsView'a push eder. Restoranın menü öğelerini
+            // de yorumlar ekranına geçiyoruz ki "Yorum Yaz" formundaki yemek
+            // seçici doğru menüyü gösterebilsin.
+            NavigationLink {
+                ReviewsView(menuItems: menuData?.categories.flatMap(\.items) ?? [])
+            } label: {
+                HStack(spacing: MenuLoTheme.Spacing.sm) {
+                    Image(systemName: "text.bubble.fill")
+                        .foregroundColor(MenuLoTheme.Colors.primary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Yorumları Görüntüle")
+                            .font(MenuLoTheme.Fonts.body)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.primary)
+                        Text("Lezzet, servis ve ambiyans değerlendirmeleri")
+                            .font(MenuLoTheme.Fonts.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding()
+                .background(Color(.secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: MenuLoTheme.CornerRadius.medium))
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal)
+            .padding(.top, 4)
         }
         .padding(.top, MenuLoTheme.Spacing.md)
     }
@@ -221,6 +271,20 @@ struct RestaurantDetailView: View {
             self.errorMessage = error.localizedDescription
         }
         isLoading = false
+    }
+
+    /// Header'daki description için RestaurantDetail'i çeker. Public endpoint
+    /// olduğu için token gerektirmiyor; başarısız olursa sessizce yutuyoruz —
+    /// menü yüklemesi öncelikli akış, description bonus.
+    private func loadDetail() async {
+        do {
+            let result = try await NetworkManager.shared.fetchRestaurantDetails(
+                restaurantId: restaurant.id
+            )
+            self.detail = result
+        } catch {
+            // Sessiz fail — description görünmez, başlık+menü çalışmaya devam eder.
+        }
     }
 }
 

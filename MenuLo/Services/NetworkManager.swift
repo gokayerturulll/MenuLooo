@@ -287,6 +287,32 @@ class NetworkManager {
         try Self.validateStatus(response)
     }
 
+    // MARK: - Reviews (Yorumlar)
+    //
+    //   GET  /api/restaurants/:id/reviews   → public liste
+    //   POST /api/restaurants/:id/reviews   → auth gerekli (Bearer)
+
+    /// Restoranın yorumlarını yeni → eski sıralamayla çeker.
+    func fetchReviews(restaurantId: Int) async throws -> [AppReview] {
+        guard let url = URL(string: "\(baseURL)/restaurants/\(restaurantId)/reviews") else {
+            throw NetworkError.badURL
+        }
+        let (data, response) = try await URLSession.shared.data(for: authedRequest(url: url, method: "GET"))
+        try Self.validateStatus(response, errorPayload: data)
+        return try JSONDecoder().decode(ReviewListResponse.self, from: data).data
+    }
+
+    /// Yeni yorum gönderir; başarılı olursa join'lenmiş AppReview döner.
+    func submitReview(restaurantId: Int, payload: ReviewSubmitPayload) async throws -> AppReview {
+        guard let url = URL(string: "\(baseURL)/restaurants/\(restaurantId)/reviews") else {
+            throw NetworkError.badURL
+        }
+        let body = try JSONEncoder().encode(payload)
+        let (data, response) = try await URLSession.shared.data(for: authedRequest(url: url, method: "POST", body: body))
+        try Self.validateStatus(response, errorPayload: data)
+        return try JSONDecoder().decode(ReviewResponse.self, from: data).data
+    }
+
     // MARK: - Helpers
 
     private func authedRequest(url: URL, method: String, body: Data? = nil) -> URLRequest {

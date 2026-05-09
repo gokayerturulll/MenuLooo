@@ -27,7 +27,12 @@ fileprivate struct Review: Identifiable {
 // MARK: - ReviewsView
 struct ReviewsView: View {
 
-    @State private var selectedSegment = 0  // 0 = Meal, 1 = Restaurant
+    /// Restoranın menü öğeleri — RestaurantDetailView burayı `flatMap` ederek
+    /// geçer; kullanıcı isterse "Yorum Yaz" formundan bir yemeği işaretleyebilsin.
+    /// Önizleme/standalone kullanım için varsayılan boş.
+    var menuItems: [MenuDetailItem] = []
+
+    @State private var selectedSegment = 0  // 0 = Yemek, 1 = Mekan
     @State private var showWriteSheet  = false
     @State private var ratingFilter    = 0  // 0 = Tümü
 
@@ -108,8 +113,8 @@ struct ReviewsView: View {
 
                     // MARK: - Segmented Control
                     Picker("Tür", selection: $selectedSegment.animation()) {
-                        Text("Meal Reviews").tag(0)
-                        Text("Restaurant Reviews").tag(1)
+                        Text("Yemek Yorumları").tag(0)
+                        Text("Mekan Yorumları").tag(1)
                     }
                     .pickerStyle(.segmented)
                     .padding(.horizontal, MenuLoTheme.Spacing.lg)
@@ -160,10 +165,10 @@ struct ReviewsView: View {
                 .padding(.top, MenuLoTheme.Spacing.md)
             }
             .background(MenuLoTheme.Colors.backgroundLight)
-            .navigationTitle("Reviews & Ratings")
+            .navigationTitle("Yorumlar ve Puanlar")
             .navigationBarTitleDisplayMode(.large)
             .sheet(isPresented: $showWriteSheet) {
-                WriteReviewSheet()
+                WriteReviewSheet(menuItems: menuItems)
             }
         }
     }
@@ -345,11 +350,20 @@ private struct ReviewCard: View {
 
 // MARK: - Yorum Yazma Sheet
 struct WriteReviewSheet: View {
+    let menuItems: [MenuDetailItem]
+
     @Environment(\.dismiss) private var dismiss
 
-    @State private var selectedRating = 0
+    // Yemek seçici — itemId Int? olarak tutuluyor; nil = "Sadece Mekanı Değerlendir"
+    @State private var selectedMealId: Int? = nil
+
+    @State private var selectedRating = 0          // Genel Puan (zorunlu, 1-5)
+    @State private var tasteRating: Int? = nil     // Lezzet (opsiyonel)
+    @State private var serviceRating: Int? = nil   // Servis (opsiyonel)
+    @State private var attitudeRating: Int? = nil  // Ambiyans/Tutum (opsiyonel)
+
     @State private var comment = ""
-    @State private var reviewType = 0  // 0 = Yemek, 1 = Restoran
+    @State private var reviewType = 0  // 0 = Yemek, 1 = Mekan
     @State private var isSubmitting = false
 
     var body: some View {
@@ -360,72 +374,27 @@ struct WriteReviewSheet: View {
                     // Tür Seçici
                     Picker("Yorum Türü", selection: $reviewType) {
                         Text("Yemek Yorumu").tag(0)
-                        Text("Restoran Yorumu").tag(1)
+                        Text("Mekan Yorumu").tag(1)
                     }
                     .pickerStyle(.segmented)
                     .padding(.horizontal, MenuLoTheme.Spacing.lg)
 
-                    // Yıldız Seçici
-                    VStack(spacing: MenuLoTheme.Spacing.sm) {
-                        Text("Puanınız")
-                            .font(MenuLoTheme.Fonts.subtitle)
-                            .foregroundColor(MenuLoTheme.Colors.textPrimary)
-
-                        HStack(spacing: MenuLoTheme.Spacing.md) {
-                            ForEach(1...5, id: \.self) { star in
-                                Button {
-                                    withAnimation(.spring(response: 0.3)) {
-                                        selectedRating = star
-                                    }
-                                } label: {
-                                    Image(systemName: star <= selectedRating ? "star.fill" : "star")
-                                        .foregroundColor(.yellow)
-                                        .font(.system(size: 36))
-                                        .scaleEffect(star <= selectedRating ? 1.15 : 1.0)
-                                }
-                            }
-                        }
-
-                        if selectedRating > 0 {
-                            Text(ratingLabel)
-                                .font(MenuLoTheme.Fonts.caption)
-                                .foregroundColor(MenuLoTheme.Colors.textSecondary)
-                                .transition(.opacity)
-                        }
+                    // Yemek Seçici (İsteğe Bağlı) — yıldızların üstünde
+                    if !menuItems.isEmpty {
+                        mealPickerCard
                     }
-                    .padding(MenuLoTheme.Spacing.lg)
-                    .background(MenuLoTheme.Colors.cardBackground)
-                    .cornerRadius(MenuLoTheme.CornerRadius.large)
-                    .padding(.horizontal, MenuLoTheme.Spacing.lg)
 
-                    // Yorum Alanı
-                    VStack(alignment: .leading, spacing: MenuLoTheme.Spacing.sm) {
-                        Label("Yorumunuz", systemImage: "text.bubble.fill")
-                            .font(MenuLoTheme.Fonts.caption)
-                            .foregroundColor(MenuLoTheme.Colors.textSecondary)
-                            .padding(.horizontal, MenuLoTheme.Spacing.lg)
+                    // Genel Puan (Zorunlu)
+                    overallRatingCard
 
-                        ZStack(alignment: .topLeading) {
-                            if comment.isEmpty {
-                                Text("Deneyiminizi paylaşın…")
-                                    .font(MenuLoTheme.Fonts.body)
-                                    .foregroundColor(MenuLoTheme.Colors.textSecondary.opacity(0.5))
-                                    .padding(MenuLoTheme.Spacing.md)
-                            }
-                            TextEditor(text: $comment)
-                                .font(MenuLoTheme.Fonts.body)
-                                .foregroundColor(MenuLoTheme.Colors.textPrimary)
-                                .frame(minHeight: 120)
-                                .padding(MenuLoTheme.Spacing.sm)
-                        }
-                        .background(MenuLoTheme.Colors.cardBackground)
-                        .cornerRadius(MenuLoTheme.CornerRadius.large)
-                        .shadow(color: .black.opacity(0.04), radius: 4)
-                        .padding(.horizontal, MenuLoTheme.Spacing.lg)
-                    }
+                    // Detaylı Puanlama (İsteğe Bağlı) — Lezzet / Servis / Ambiyans
+                    detailedRatingsCard
+
+                    // Değerlendirme metni
+                    commentCard
 
                     PrimaryButton(
-                        title: "Yorumu Gönder",
+                        title: "Gönder",
                         isLoading: isSubmitting
                     ) {
                         isSubmitting = true
@@ -434,8 +403,8 @@ struct WriteReviewSheet: View {
                             dismiss()
                         }
                     }
-                    .disabled(selectedRating == 0 || comment.isEmpty)
-                    .opacity(selectedRating == 0 || comment.isEmpty ? 0.5 : 1)
+                    .disabled(selectedRating == 0)
+                    .opacity(selectedRating == 0 ? 0.5 : 1)
                     .padding(.horizontal, MenuLoTheme.Spacing.lg)
                     .padding(.bottom, MenuLoTheme.Spacing.xl)
                 }
@@ -451,6 +420,157 @@ struct WriteReviewSheet: View {
                 }
             }
         }
+    }
+
+    // MARK: - Subsections
+
+    private var mealPickerCard: some View {
+        VStack(alignment: .leading, spacing: MenuLoTheme.Spacing.sm) {
+            Label("Yemek Seç (İsteğe Bağlı)", systemImage: "fork.knife")
+                .font(MenuLoTheme.Fonts.subtitle)
+                .foregroundColor(MenuLoTheme.Colors.textPrimary)
+
+            Menu {
+                Button("Sadece Mekanı Değerlendir") { selectedMealId = nil }
+                if !menuItems.isEmpty { Divider() }
+                ForEach(menuItems) { item in
+                    Button(item.name) { selectedMealId = item.id }
+                }
+            } label: {
+                HStack {
+                    Text(selectedMealName ?? "Yemek Seçilmedi")
+                        .font(MenuLoTheme.Fonts.body)
+                        .foregroundColor(selectedMealId == nil
+                                         ? MenuLoTheme.Colors.textSecondary
+                                         : MenuLoTheme.Colors.textPrimary)
+                        .lineLimit(1)
+                    Spacer()
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption)
+                        .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                }
+                .padding(MenuLoTheme.Spacing.md)
+                .background(MenuLoTheme.Colors.backgroundLight)
+                .cornerRadius(MenuLoTheme.CornerRadius.medium)
+            }
+        }
+        .padding(MenuLoTheme.Spacing.lg)
+        .background(MenuLoTheme.Colors.cardBackground)
+        .cornerRadius(MenuLoTheme.CornerRadius.large)
+        .padding(.horizontal, MenuLoTheme.Spacing.lg)
+    }
+
+    private var overallRatingCard: some View {
+        VStack(spacing: MenuLoTheme.Spacing.sm) {
+            Text("Genel Puan")
+                .font(MenuLoTheme.Fonts.subtitle)
+                .foregroundColor(MenuLoTheme.Colors.textPrimary)
+
+            HStack(spacing: MenuLoTheme.Spacing.md) {
+                ForEach(1...5, id: \.self) { star in
+                    Button {
+                        withAnimation(.spring(response: 0.3)) {
+                            selectedRating = star
+                        }
+                    } label: {
+                        Image(systemName: star <= selectedRating ? "star.fill" : "star")
+                            .foregroundColor(.yellow)
+                            .font(.system(size: 36))
+                            .scaleEffect(star <= selectedRating ? 1.15 : 1.0)
+                    }
+                }
+            }
+
+            if selectedRating > 0 {
+                Text(ratingLabel)
+                    .font(MenuLoTheme.Fonts.caption)
+                    .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                    .transition(.opacity)
+            }
+        }
+        .padding(MenuLoTheme.Spacing.lg)
+        .background(MenuLoTheme.Colors.cardBackground)
+        .cornerRadius(MenuLoTheme.CornerRadius.large)
+        .padding(.horizontal, MenuLoTheme.Spacing.lg)
+    }
+
+    private var detailedRatingsCard: some View {
+        VStack(alignment: .leading, spacing: MenuLoTheme.Spacing.md) {
+            Text("Detaylı Puanlama (İsteğe Bağlı)")
+                .font(MenuLoTheme.Fonts.subtitle)
+                .foregroundColor(MenuLoTheme.Colors.textPrimary)
+
+            detailRatingRow(label: "Lezzet",         icon: "fork.knife",       value: $tasteRating)
+            detailRatingRow(label: "Servis",         icon: "hand.raised.fill", value: $serviceRating)
+            detailRatingRow(label: "Ambiyans/Tutum", icon: "sparkles",         value: $attitudeRating)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(MenuLoTheme.Spacing.lg)
+        .background(MenuLoTheme.Colors.cardBackground)
+        .cornerRadius(MenuLoTheme.CornerRadius.large)
+        .padding(.horizontal, MenuLoTheme.Spacing.lg)
+    }
+
+    private func detailRatingRow(label: String,
+                                 icon: String,
+                                 value: Binding<Int?>) -> some View {
+        HStack {
+            Image(systemName: icon)
+                .foregroundColor(MenuLoTheme.Colors.primary)
+                .frame(width: 22)
+            Text(label)
+                .font(MenuLoTheme.Fonts.body)
+                .foregroundColor(MenuLoTheme.Colors.textPrimary)
+            Spacer()
+            HStack(spacing: 4) {
+                ForEach(1...5, id: \.self) { i in
+                    Button {
+                        // Aynı yıldıza ikinci tap → temizle
+                        value.wrappedValue = (value.wrappedValue == i) ? nil : i
+                    } label: {
+                        Image(systemName: i <= (value.wrappedValue ?? 0) ? "star.fill" : "star")
+                            .font(.system(size: 18))
+                            .foregroundColor(.yellow)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(label) \(i) yıldız")
+                }
+            }
+        }
+    }
+
+    private var commentCard: some View {
+        VStack(alignment: .leading, spacing: MenuLoTheme.Spacing.sm) {
+            Label("Değerlendirme (İsteğe Bağlı)", systemImage: "text.bubble.fill")
+                .font(MenuLoTheme.Fonts.caption)
+                .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                .padding(.horizontal, MenuLoTheme.Spacing.lg)
+
+            ZStack(alignment: .topLeading) {
+                if comment.isEmpty {
+                    Text("Deneyiminizi paylaşın…")
+                        .font(MenuLoTheme.Fonts.body)
+                        .foregroundColor(MenuLoTheme.Colors.textSecondary.opacity(0.5))
+                        .padding(MenuLoTheme.Spacing.md)
+                }
+                TextEditor(text: $comment)
+                    .font(MenuLoTheme.Fonts.body)
+                    .foregroundColor(MenuLoTheme.Colors.textPrimary)
+                    .frame(minHeight: 120)
+                    .padding(MenuLoTheme.Spacing.sm)
+            }
+            .background(MenuLoTheme.Colors.cardBackground)
+            .cornerRadius(MenuLoTheme.CornerRadius.large)
+            .shadow(color: .black.opacity(0.04), radius: 4)
+            .padding(.horizontal, MenuLoTheme.Spacing.lg)
+        }
+    }
+
+    // MARK: - Helpers
+
+    private var selectedMealName: String? {
+        guard let id = selectedMealId else { return nil }
+        return menuItems.first(where: { $0.id == id })?.name
     }
 
     private var ratingLabel: String {

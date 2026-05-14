@@ -1,20 +1,27 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
-// Create a new PostgreSQL connection pool
 const pool = new Pool({
-    user: process.env.DB_USER,
-    host: process.env.DB_HOST,
+    user:     process.env.DB_USER,
+    host:     process.env.DB_HOST,
     database: process.env.DB_NAME,
     password: process.env.DB_PASSWORD,
-    port: process.env.DB_PORT,
+    port:     parseInt(process.env.DB_PORT || '5432', 10),
+    // Bağlantı havuzu limitleri — production'da servis çöküşlerine karşı koruma
+    max:                  parseInt(process.env.DB_POOL_MAX || '20', 10),
+    idleTimeoutMillis:    30_000,   // 30s boşta kalan bağlantıyı kapat
+    connectionTimeoutMillis: 5_000, // 5s içinde bağlanamazsa hata fırlat
+    allowExitOnIdle:      false,
 });
 
-// Test the database connection as soon as the file is loaded
+pool.on('error', (err) => {
+    console.error('[DB] Beklenmeyen bağlantı hatası:', err.message);
+});
+
 const connectDB = async () => {
     try {
         const client = await pool.connect();
-        console.log(`✅ PostgreSQL Connected successfully to database: ${process.env.DB_NAME}`);
+        console.log(`✅ PostgreSQL Connected: ${process.env.DB_NAME}`);
         client.release();
     } catch (err) {
         console.error('❌ PostgreSQL Connection Error:', err.message);

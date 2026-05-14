@@ -154,7 +154,10 @@ struct RestaurantDetailView: View {
             // de yorumlar ekranına geçiyoruz ki "Yorum Yaz" formundaki yemek
             // seçici doğru menüyü gösterebilsin.
             NavigationLink {
-                ReviewsView(menuItems: menuData?.categories.flatMap(\.items) ?? [])
+                ReviewsView(
+                    restaurantId: restaurant.restaurantId,
+                    menuItems: menuData?.categories.flatMap(\.items) ?? []
+                )
             } label: {
                 HStack(spacing: MenuLoTheme.Spacing.sm) {
                     Image(systemName: "text.bubble.fill")

@@ -1,17 +1,15 @@
-//
-//  MainTabView.swift
-//  MenuLo
-//
-//  Ana Tab Bar navigasyonu — 5 sekme + Floating Action Button (MenuBot).
-//  Sekmeler: Keşfet · Harita · QR/Oda · Favoriler · Profil
-//
-
 import SwiftUI
 
 struct MainTabView: View {
 
     @State private var selectedTab: Int = 0
-    @State private var showMenuBot = false
+    @State private var showMenuBot      = false
+
+    // Tüm odalı sekmelerin paylaşacağı tek ViewModel instance
+    @StateObject private var roomViewModel = RoomViewModel()
+
+    // Arka plan / ön plan geçişlerini yakalamak için
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -24,7 +22,7 @@ struct MainTabView: View {
                     .tabItem { Label("Keşfet", systemImage: selectedTab == 0 ? "magnifyingglass.circle.fill" : "magnifyingglass") }
                     .tag(0)
 
-                // Tab 1: Harita — MapView kendi NavigationStack(path:)'ini yönetiyor
+                // Tab 1: Harita
                 MapView()
                     .tabItem { Label("Harita", systemImage: selectedTab == 1 ? "map.fill" : "map") }
                     .tag(1)
@@ -45,6 +43,8 @@ struct MainTabView: View {
                     .tag(4)
             }
             .tint(MenuLoTheme.Colors.primary)
+            // RoomViewModel tüm tab'larda erişilebilir olsun
+            .environmentObject(roomViewModel)
 
             // MARK: - Floating Action Button (MenuBot)
             HStack {
@@ -70,20 +70,31 @@ struct MainTabView: View {
                     }
                 }
                 .padding(.trailing, MenuLoTheme.Spacing.lg)
-                .padding(.bottom, 120) // TabBar ve harita butonlarının üzerine çıkması için boşluk artırıldı
+                .padding(.bottom, 120)
                 .fullScreenCover(isPresented: $showMenuBot) {
-                    // FAB'dan açılan MenuBot — restaurantId yok, genel gurme modu.
-                    // Spesifik restoran context'i için RestaurantDetailView'daki
-                    // sparkles butonunu kullan.
                     MenuBotView(restaurantId: nil)
                 }
             }
         }
         .ignoresSafeArea(.keyboard)
+        // MARK: - Socket Yaşam Döngüsü
+        .onChange(of: scenePhase) { phase in
+            switch phase {
+            case .background:
+                // Pil ve ağ tasarrufu: arka planda soketi kapat
+                roomViewModel.appDidEnterBackground()
+            case .active:
+                // Ön plana dönünce — kullanıcı bir odadaysa otomatik yeniden bağlan
+                roomViewModel.appDidBecomeActive()
+            default:
+                break
+            }
+        }
     }
 }
 
 // MARK: - Preview
+
 #Preview {
     MainTabView()
         .environmentObject(AuthViewModel())

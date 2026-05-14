@@ -97,7 +97,7 @@ class AuthViewModel: ObservableObject {
                     }
 
                     if let token = response.token {
-                        KeychainHelper.save(token, forKey: "authToken")
+                        KeychainHelper.save(token, forKey: AppConstants.keychainTokenKey)
                     }
                     self.currentUser = user
                     self.isAuthenticated = true
@@ -114,23 +114,15 @@ class AuthViewModel: ObservableObject {
     }
 
     // MARK: - Kayıt (Register)
-    
-    /// Yeni kullanıcı kaydı oluşturur.
-    ///
-    /// - Parameters:
-    ///   - name: Kullanıcının adı
-    ///   - email: E-posta adresi
-    ///   - password: Şifre
-    ///   - userType: Müşteri veya İşletme
+
     func register(name: String, email: String, password: String, userType: UserType) {
         guard !name.isEmpty, !email.isEmpty, !password.isEmpty else {
             self.errorMessage = "Tüm alanlar doldurulmalıdır."
             self.showError = true
             return
         }
-        
         isLoading = true
-        
+
         let role = userType == .business ? "Owner" : "Customer"
         
         Task {
@@ -142,7 +134,7 @@ class AuthViewModel: ObservableObject {
                     let loginResp = try await NetworkManager.shared.login(email: email, password: password)
                     if loginResp.success, let user = loginResp.user {
                         if let token = loginResp.token {
-                            KeychainHelper.save(token, forKey: "authToken")
+                            KeychainHelper.save(token, forKey: AppConstants.keychainTokenKey)
                         }
                         self.currentUser = user
                         self.isAuthenticated = true
@@ -166,7 +158,7 @@ class AuthViewModel: ObservableObject {
     
     /// Kullanıcı oturumunu sonlandırır.
     func logout() {
-        KeychainHelper.delete(forKey: "authToken")
+        KeychainHelper.delete(forKey: AppConstants.keychainTokenKey)
         currentUser = nil
         isAuthenticated = false
     }

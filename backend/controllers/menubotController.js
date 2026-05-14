@@ -2,19 +2,23 @@
 // ============================================================================
 // MenuBot — Hibrit RAG Mimarisi (Groq Chat + Gemini Embedding)
 // ----------------------------------------------------------------------------
-// Stage 1 — Intent Gate          → Groq llama-3.1-8b-instant (JSON, Decision-First)
-// Stage 2 — Embedding + Search   → Gemini gemini-embedding-001 + pgvector
-// Stage 3 — Grounded Generation  → Groq llama-3.3-70b-versatile (adres farkındalığı)
+// Stage 1 — Extended Intent Gate    → Groq llama-3.1-8b-instant
+//                                     { intent: food|chit-chat|off-topic, district }
+// Stage 2 — Embedding + Search      → Gemini gemini-embedding-001 + pgvector
+//                                     (district-aware, restaurant-diverse)
+// Stage 3 — Grounded Generation     → Groq llama-3.3-70b-versatile
 //
-// Neden hibrit?
-//   • Gemini chat tarafında 503/429 sıklığı RAG akışını sürekli kesiyordu.
-//   • Groq Llama kotaları çok daha geniş + latency düşük.
-//   • Embedding tarafında DB'deki 3072d vektörler korunsun diye Gemini kalıyor;
-//     boyut değiştirmek tüm tabloyu yeniden seed etmek demektir.
-//
-// NOT: Talep edilen 'text-embedding-004' modeli artık 768d üretiyor; mevcut DB
-// 3072d (gemini-embedding-001 ile seed edilmiş) olduğu için aynı modeli koruduk.
-// İleride 768d'ye geçilecekse seed_embeddings.js'in tekrar çalıştırılması gerekir.
+// v2 değişiklikleri:
+//   • classifyIntent üç kategori döndürür: 'food' | 'chit-chat' | 'off-topic'
+//     'chit-chat' Stage 2'yi tamamen atlar (embedding + vector search yok).
+//   • Stage 1 + Stage 2 + DB lookup Promise.allSettled ile paralel başlar;
+//     yemek sorgularında toplam latency ~250-350ms kısalır.
+//   • district bilgisi SQL ILIKE filtresiyle retrieval'a yansıtılır;
+//     eşleşme yoksa global search'e graceful fallback.
+//   • FETCH_K = 3×TOP_K çekilerek her restorandan max 2 öğe alınır
+//     → context homojenliği önlenir.
+//   • withTimeout() tüm dış API çağrılarını sarar; asılı kalan request'ler
+//     ETIMEDOUT hatasıyla kapatılır.
 // ============================================================================
 
 const pool = require('../config/db');
@@ -22,39 +26,40 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const Groq = require('groq-sdk');
 
 if (!process.env.GEMINI_API_KEY) {
-    console.warn("⚠️  GEMINI_API_KEY tanımlı değil — embedding stage başarısız olacak.");
+    console.warn('⚠️  GEMINI_API_KEY tanımlı değil — embedding stage başarısız olacak.');
 }
 if (!process.env.GROQ_API_KEY) {
-    console.warn("⚠️  GROQ_API_KEY tanımlı değil — intent ve generation stage başarısız olacak.");
+    console.warn('⚠️  GROQ_API_KEY tanımlı değil — intent ve generation stage başarısız olacak.');
 }
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 const embeddingModel = genAI.getGenerativeModel({ model: 'gemini-embedding-001' });
-
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || '' });
 
 // ─── Sabitler ────────────────────────────────────────────────────────────────
 
-/** Prompt şablonlarına gömülecek mesajlardan kontrol karakterlerini ve tırnak işaretlerini temizler. */
 function sanitizeForPrompt(text) {
     return text
-        .replace(/[\x00-\x1F\x7F]/g, ' ') // kontrol karakterleri
-        .replace(/"/g, '\\"')               // çift tırnak escape
-        .replace(/`/g, "'");               // backtick → single quote
+        .replace(/[\x00-\x1F\x7F]/g, ' ')
+        .replace(/"/g, '\\"')
+        .replace(/`/g, "'");
 }
 
-const INTENT_MODEL = 'llama-3.1-8b-instant';
-const ANSWER_MODEL = 'llama-3.3-70b-versatile';
+const INTENT_MODEL             = 'llama-3.1-8b-instant';
+const ANSWER_MODEL             = 'llama-3.3-70b-versatile';
+const TOP_K                    = 6;
+const FETCH_K                  = TOP_K * 3;   // çeşitlilik için geniş çek, sonra filtrele
+const MAX_ITEMS_PER_RESTAURANT = 2;            // context'te aynı restorandan max öğe sayısı
+const MAX_MESSAGE_LEN          = 1000;
+const API_TIMEOUT_MS           = 8_000;        // dış API çağrıları için hard timeout
 
-const TOP_K = 6;
-const MAX_MESSAGE_LEN = 1000;
 const OFF_TOPIC_RESPONSE =
     "Ben MenuLo'nun gurme asistanıyım. Sadece yemekler, mekanlar ve menüler hakkında yardımcı olabilirim.";
 
 const ERROR_MESSAGES = {
-    quota: 'Yapay zeka sistemimiz şu an çok yoğun veya günlük limitine ulaştı. Lütfen kısa bir süre sonra tekrar deneyin.',
+    quota:       'Yapay zeka sistemimiz şu an çok yoğun veya günlük limitine ulaştı. Lütfen kısa bir süre sonra tekrar deneyin.',
     unavailable: 'Yapay zeka sunucularına şu an ulaşılamıyor. Lütfen birazdan tekrar deneyin.',
-    unknown: 'Yanıt üretilirken sistemsel bir hata oluştu. Lütfen tekrar deneyin.',
+    unknown:     'Yanıt üretilirken sistemsel bir hata oluştu. Lütfen tekrar deneyin.',
 };
 
 const ANSWER_SYSTEM_PROMPT =
@@ -65,14 +70,15 @@ const ANSWER_SYSTEM_PROMPT =
     "Yanıtların samimi, akıcı ve 2-4 cümle olsun; ürün önerirken fiyatlarını mutlaka belirt. " +
     "Asla 'elimde bilgi yok, internete bakayım' gibi cümleler kurma — yalnızca sana verilen menü bilgileriyle konuş. " +
     "ADRES FARKINDALIĞI: Sana verilen menü bilgilerindeki 'Adres' alanlarını dikkatlice incele. " +
-    "Eğer kullanıcı belirli bir semtten (örn. 'Ataşehir', 'Kadıköy', 'Üsküdar', 'Maltepe') bahsediyorsa, " +
-    "SADECE o semtte adresi geçen restoranları öner; başka semtlerdeki yerleri bu öneriye dahil etme. " +
+    "Eğer kullanıcı belirli bir semtten bahsediyorsa, SADECE o semtte adresi geçen restoranları öner. " +
     "Eğer sorulan semte ait hiçbir veri yoksa, dürüstçe belirt ve elindeki diğer semtlerden alternatif sun. " +
-    "Örnek: 'Şu an o bölgede mekanım yok ama Kadıköy'deki Moda Burger güzel bir seçenek olabilir.' " +
-    "Asla bir restoranı yanlış semtte göstermeye çalışma, sahte adres uydurma. " +
-    "CHIT-CHAT KURALI: Eğer kullanıcının mesajı sadece 'Selam', 'Merhaba', 'Nasılsın', 'Teşekkürler' gibi kısa bir nezaket veya sohbet (chit-chat) ifadesiyse, SANA VERİLEN VERİTABANI İÇERİĞİNİ (CONTEXT) TAMAMEN GÖRMEZDEN GEL. Kesinlikle mekan veya yemek tavsiyesinde bulunma. Sadece Menulo'nun gurme asistanı olarak kibarca karşılık ver ve 'Bugün canın ne yemek istiyor?' veya 'Sana hangi bölgeden mekan önermemi istersin?' diyerek sohbeti başlat.";
+    "Asla bir restoranı yanlış semtte gösterme, sahte adres uydurma. " +
+    "CHIT-CHAT KURALI: Kullanıcının mesajı selamlama, teşekkür veya kısa nezaket ifadesiyse " +
+    "CONTEXT'İ TAMAMEN GÖRMEZDEN GEL — mekan veya yemek önerme. " +
+    "Samimi ve kısa karşılık ver; daima 'sen' kipini kullan (asla 'siz'/'misiniz' deme). " +
+    "Tek bir açık uçlu soru sor — ne yemek istediğini, hangi semti düşündüğünü ya da bütçesini sorabilirsin.";
 
-// ─── Hata Yönetimi Helper'ları ───────────────────────────────────────────────
+// ─── Hata Yönetimi ───────────────────────────────────────────────────────────
 
 function extractStatus(err) {
     if (typeof err?.status === 'number') return err.status;
@@ -90,13 +96,9 @@ function isTimeoutError(err) {
 
 function classifyAIError(err) {
     const status = extractStatus(err);
-    if (status === 429) {
-        return { category: 'quota', status: 429, userMessage: ERROR_MESSAGES.quota };
-    }
-    if (status === 503 || status === 504 || isTimeoutError(err)) {
-        return { category: 'unavailable', status: 503, userMessage: ERROR_MESSAGES.unavailable };
-    }
-    return { category: 'unknown', status: 500, userMessage: ERROR_MESSAGES.unknown };
+    if (status === 429)                                        return { category: 'quota',       status: 429, userMessage: ERROR_MESSAGES.quota };
+    if (status === 503 || status === 504 || isTimeoutError(err)) return { category: 'unavailable', status: 503, userMessage: ERROR_MESSAGES.unavailable };
+    return                                                            { category: 'unknown',     status: 500, userMessage: ERROR_MESSAGES.unknown };
 }
 
 function logAIError(stage, err) {
@@ -118,48 +120,55 @@ async function runAICall(stage, fn) {
     }
 }
 
-// ─── Stage 1: Intent Classification (Groq, Decision-First JSON, fail-open) ──
+// ─── Timeout Wrapper ─────────────────────────────────────────────────────────
 
-async function isFoodRelated(message) {
+function withTimeout(promise, ms, label) {
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            const err = new Error(`${label} timed out after ${ms}ms`);
+            err.code = 'ETIMEDOUT';
+            reject(err);
+        }, ms);
+        promise.then(
+            (val) => { clearTimeout(timer); resolve(val); },
+            (err) => { clearTimeout(timer); reject(err); }
+        );
+    });
+}
+
+// ─── Stage 1: Extended Intent Classification ─────────────────────────────────
+// @returns {{ intent: 'food'|'chit-chat'|'off-topic', district: string|null }}
+
+async function classifyIntent(message) {
     const systemPrompt =
-        "Sen bir MenuLo Gurme Asistanı'nın kapı görevlisisin. MenuLo bir RESTORAN ve MENÜ " +
-        "tavsiye uygulamasıdır; bu yüzden kullanıcının cümleleri çoğunlukla yemek bağlamındadır. " +
-        "Verilen cümlenin yemek, restoran, menü, tarif, içecek, sipariş veya bu sohbetin doğal " +
-        "akışı ile ilgili olup olmadığına karar verirsin. " +
-        "ÇIKTI olarak SADECE şu yapıda bir JSON döndür (Decision-First — önce karar, sonra analiz): " +
-        '{ "karar": "EVET" veya "HAYIR", "analiz": "Kısa Türkçe gerekçe" } ' +
-        "Başka hiçbir metin, açıklama veya markdown ekleme. " +
-
-        // Nezaket / sohbet ifadeleri istisnası
-        "ÖNEMLİ İSTİSNA 1 (Nezaket): Kullanıcının 'Selam', 'Merhaba', 'Günaydın', 'İyi akşamlar', " +
-        "'Teşekkürler', 'Eline sağlık', 'Sağ ol', 'Tamam', 'Anladım' gibi temel sohbet " +
-        "başlatıcı (greetings) veya bitirici nezaket ifadelerini DOĞRUDAN REDDETME. " +
-        "Bunları doğal sohbet akışının bir parçası kabul et ve karar alanına 'EVET' yazarak " +
-        "geçişlerine izin ver. Yemek asistanı da bir insan gibi selamlaşmalı, teşekkürlere " +
-        "kibarca karşılık verebilmelidir. " +
-
-        // Lokasyon ve takip cümlesi varsayımı
-        "ÖNEMLİ İSTİSNA 2 (Gurme Uygulaması Varsayımı): MenuLo bir restoran asistanı olduğu için, " +
-        "kullanıcı 'Bostancı'da nereler var?', 'Şurada ne var?', 'Yakında bir şey var mı?' gibi " +
-        "ucu açık LOKASYON sorularını sorduğunda, bunun bir RESTORAN/MEKAN arayışı olduğunu " +
-        "VARSAY ve EVET dön. " +
-        "Ayrıca 'Kadıköy'de olmasına gerek yok', 'Fark etmez', 'Başka yer de olur', " +
-        "'Daha ucuzu var mı', 'Başka önerin var mı' gibi önceki bir sohbetin DEVAMI niteliğindeki " +
-        "(follow-up) kısa cümleleri doğrudan yemek sohbeti kabul et ve KESİNLİKLE REDDETME — " +
-        "her zaman EVET dön. Bu kısa cümleler bağlamdan kopuk gibi görünse bile MenuLo akışında " +
-        "her zaman bir restoran tavsiyesinin devamıdır.";
+        "Sen bir MenuLo Gurme Asistanı'nın akıllı kapı görevlisisin. " +
+        "MenuLo bir RESTORAN ve MENÜ tavsiye uygulamasıdır. " +
+        "Kullanıcının mesajını analiz ederek şu kategorilerden birini seç:\n" +
+        '  "food"      — Yemek, restoran, menü, içecek, sipariş, lokasyon sorgusu, semt adı, diyet filtresi veya önceki yemek sohbetinin devamı.\n' +
+        '  "chit-chat" — Selamlama, teşekkür, veda, kısa nezaket ifadesi (Merhaba, Selam, Teşekkürler, Sağ ol, Günaydın vb.).\n' +
+        '  "off-topic" — Yemek veya restoranla hiçbir ilgisi olmayan soru (matematik, kodlama, tarih, genel kültür vb.).\n\n' +
+        '"food" veya "chit-chat" mesajında İstanbul semti/ilçe adı geçiyorsa "district" alanına o adı yaz; yoksa null.\n\n' +
+        'ÇIKTI: Sadece şu JSON yapısını döndür (başka metin ekleme):\n' +
+        '{ "intent": "food"|"chit-chat"|"off-topic", "district": "SemtAdı"|null, "analiz": "kısa Türkçe gerekçe" }\n\n' +
+        'KURALLAR:\n' +
+        '  • Yalın semt adı (Kadıköy, Beşiktaş, Ataköy…)    → food, district: semt adı\n' +
+        '  • Takip cümlesi (Fark etmez, Başka yer de olur…) → food\n' +
+        '  • Selamlama/teşekkür                              → chit-chat\n' +
+        '  • Matematik/kodlama/genel kültür                  → off-topic';
 
     const fewShotExamples = [
-        { user: '2+2 kaç eder?',                        out: { karar: 'HAYIR', analiz: 'Matematik sorusu, yemekle ilgisi yok.' } },
-        { user: 'Kadıköy\'de burgerci öner',            out: { karar: 'EVET',  analiz: 'Kullanıcı semt bazlı burger restoranı arıyor.' } },
-        { user: 'Bana python kodu yaz',                 out: { karar: 'HAYIR', analiz: 'Kod yazma talebi, gastronomi dışı.' } },
-        { user: 'Anadolu yakasında tatlı kahve nerede', out: { karar: 'EVET',  analiz: 'Konum bazlı kafe/tatlı tavsiyesi sorusu.' } },
-        { user: 'Vegan menü var mı acaba',              out: { karar: 'EVET',  analiz: 'Diyet bazlı menü filtreleme talebi.' } },
-        { user: 'Merhaba',                              out: { karar: 'EVET',  analiz: 'Kullanıcı selam veriyor, sohbet başlatmak için izin verilmeli.' } },
-        { user: 'Teşekkür ederim çok yardımcı oldun',   out: { karar: 'EVET',  analiz: 'Kullanıcı teşekkür ediyor, nezaket ifadesi, izin verilmeli.' } },
-        { user: 'Kadıköyde olmasına gerek yok',         out: { karar: 'EVET',  analiz: 'Lokasyon tercihini değiştiren bir takip cümlesi, sohbet devamı.' } },
-        { user: 'Bostancıda nereler var',               out: { karar: 'EVET',  analiz: 'Bir yemek uygulamasında semt soruluyorsa, restoran soruluyordur.' } },
-        { user: 'Fark etmez orası da olur',             out: { karar: 'EVET',  analiz: 'Önceki bir yemek tavsiyesine onay veren takip cümlesi.' } },
+        { user: '2+2 kaç eder?',                 out: { intent: 'off-topic', district: null,        analiz: 'Matematik sorusu.' } },
+        { user: 'Kadıköyde burgerci öner',        out: { intent: 'food',      district: 'Kadıköy',   analiz: 'Semt bazlı burger arayışı.' } },
+        { user: 'Merhaba',                        out: { intent: 'chit-chat', district: null,        analiz: 'Selamlama.' } },
+        { user: 'Teşekkürler çok yardımcı oldun', out: { intent: 'chit-chat', district: null,        analiz: 'Teşekkür ifadesi.' } },
+        { user: 'Vegan menü var mı',              out: { intent: 'food',      district: null,        analiz: 'Diyet bazlı menü sorusu.' } },
+        { user: 'Ataşehir',                       out: { intent: 'food',      district: 'Ataşehir',  analiz: 'Yalın semt adı — restoran arayışı.' } },
+        { user: 'Bana python kodu yaz',           out: { intent: 'off-topic', district: null,        analiz: 'Kodlama talebi.' } },
+        { user: 'Fark etmez orası da olur',       out: { intent: 'food',      district: null,        analiz: 'Takip cümlesi — sohbet devamı.' } },
+        { user: 'Üsküdarda pizza nerede yenir',   out: { intent: 'food',      district: 'Üsküdar',   analiz: 'Semt + yemek türü sorgusu.' } },
+        { user: 'Selam nasılsın',                 out: { intent: 'chit-chat', district: null,        analiz: 'Selamlama + soru.' } },
+        { user: 'Daha ucuzu var mı',              out: { intent: 'food',      district: null,        analiz: 'Fiyat takip sorusu.' } },
+        { user: 'Beşiktaş',                       out: { intent: 'food',      district: 'Beşiktaş',  analiz: 'Yalın semt adı.' } },
     ];
 
     const fewShotText = fewShotExamples
@@ -167,75 +176,58 @@ async function isFoodRelated(message) {
         .join('\n\n');
 
     const userPrompt =
-        `Aşağıdaki örneklere göre, en sondaki cümlenin yemekle ilgili olup olmadığına karar ver.\n\n` +
-        `${fewShotText}\n\n` +
+        `Aşağıdaki örneklere göre mesajı sınıflandır.\n\n${fewShotText}\n\n` +
         `Cümle: "${sanitizeForPrompt(message.trim())}"\nCevap:`;
 
     try {
-        const completion = await groq.chat.completions.create({
-            model: INTENT_MODEL,
-            messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user',   content: userPrompt }
-            ],
-            response_format: { type: 'json_object' },
-            temperature: 0.1,
-            max_tokens: 200,
-        });
+        const completion = await withTimeout(
+            groq.chat.completions.create({
+                model: INTENT_MODEL,
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user',   content: userPrompt },
+                ],
+                response_format: { type: 'json_object' },
+                temperature: 0.1,
+                max_tokens: 150,
+            }),
+            API_TIMEOUT_MS,
+            'intent-classifier'
+        );
 
-        const responseText = completion?.choices?.[0]?.message?.content || '';
-        let isRelated = false;
-        let analiz = null;
-        let karar = null;
-        let parseStatus = 'parsed';
+        const raw = completion?.choices?.[0]?.message?.content || '';
+        const result = { intent: 'food', district: null };
 
         try {
-            const parsed = JSON.parse(responseText);
-            karar = String(parsed?.karar ?? '').toUpperCase().trim();
-            analiz = parsed?.analiz ?? null;
-            isRelated = karar.includes('EVET');
-        } catch (jsonErr) {
-            // Truncation handling — JSON yarım kesilmiş olabilir.
-            // Regex ile kelime aramıyoruz; JSON YAPISI'nı yakalıyoruz:
-            //   "karar": "EVET" / "karar":"EVET" / "karar"  :  "evet"
-            parseStatus = 'truncated';
-            const yesPattern = /"karar"\s*:\s*"\s*EVET\s*"/i;
-            const noPattern  = /"karar"\s*:\s*"\s*HAYIR\s*"/i;
-
-            if (yesPattern.test(responseText)) {
-                isRelated = true;
-                karar = 'EVET (truncated-recovery)';
-            } else if (noPattern.test(responseText)) {
-                isRelated = false;
-                karar = 'HAYIR (truncated-recovery)';
-            } else {
-                // JSON yapısı bile bulunamadı — fail-open
-                isRelated = true;
-                karar = '(yapı yakalanamadı, fail-open)';
-                parseStatus = 'unrecoverable';
+            const parsed = JSON.parse(raw);
+            const intentVal = String(parsed?.intent ?? '').toLowerCase().trim();
+            if (['food', 'chit-chat', 'off-topic'].includes(intentVal)) {
+                result.intent = intentVal;
             }
+            result.district = (typeof parsed?.district === 'string' && parsed.district.trim())
+                ? parsed.district.trim()
+                : null;
+        } catch {
+            // JSON kırpılmış — yapı ile kurtarma, fail-open
+            if (/"intent"\s*:\s*"off-topic"/i.test(raw))      result.intent = 'off-topic';
+            else if (/"intent"\s*:\s*"chit-chat"/i.test(raw)) result.intent = 'chit-chat';
         }
 
-        // ── Debug log ──
-        console.log('Gelen Soru:', message);
-        console.log('Intent (Groq) Ham Cevap:', responseText);
-        console.log('Parse Durumu:', parseStatus);
-        if (analiz) console.log('Analiz:', analiz);
-        console.log('Karar:', karar || '(yok)');
-        console.log('Final Karar:', isRelated ? 'GEÇİŞ ONAYLANDI' : 'REDDEDİLDİ');
+        console.log(`[Intent] "${message}" → ${result.intent}${result.district ? ` (${result.district})` : ''}`);
+        return result;
 
-        return isRelated;
     } catch (err) {
-        // Fail-open: Groq tamamen çökse bile guard mesajı yapıştırma — RAG'a düş.
         logAIError('intent-classifier (fail-open)', err);
-        return true;
+        return { intent: 'food', district: null };
     }
 }
 
-// ─── Stage 2: Embedding + Vector Search (Gemini + pgvector) ─────────────────
+// ─── Stage 2: Embedding + Vector Search ──────────────────────────────────────
 
 async function embedQuery(text) {
-    const result = await runAICall('embedding', () => embeddingModel.embedContent(text));
+    const result = await runAICall('embedding', () =>
+        withTimeout(embeddingModel.embedContent(text), API_TIMEOUT_MS, 'embedding')
+    );
     const values = result?.embedding?.values;
     if (!Array.isArray(values) || values.length === 0) {
         const err = new Error('Soru embedding üretilemedi.');
@@ -245,53 +237,77 @@ async function embedQuery(text) {
     return `[${values.join(',')}]`;
 }
 
+// Vektörel yakınlığa göre sıralanmış sonuçlardan restoran başına en fazla
+// MAX_ITEMS_PER_RESTAURANT öğe seç; TOP_K slot'un tamamını tek restoran dolduramasın.
+function diversifyByRestaurant(rows) {
+    const countMap = new Map();
+    const result = [];
+    for (const row of rows) {
+        const n = countMap.get(row.restaurant_id) || 0;
+        if (n < MAX_ITEMS_PER_RESTAURANT) {
+            countMap.set(row.restaurant_id, n + 1);
+            result.push(row);
+            if (result.length >= TOP_K) break;
+        }
+    }
+    return result;
+}
+
+// Tekrarlanan JOIN yapısını tek yerde tut.
+const MENU_ITEM_SELECT = `
+    SELECT
+        mi.item_id, mi.name, mi.description,
+        mi.price::float    AS price,
+        c.name              AS category,
+        r.restaurant_id,
+        r.business_name     AS restaurant_name,
+        r.address           AS restaurant_address
+    FROM menu_item mi
+    JOIN category c   ON c.category_id   = mi.category_id
+    JOIN menu m       ON m.menu_id       = c.menu_id
+    JOIN restaurant r ON r.restaurant_id = m.restaurant_id
+    WHERE mi.embedding IS NOT NULL
+`;
+
 async function searchSpecificRestaurant(restaurantId, vectorLiteral) {
-    const { rows } = await pool.query(`
-        SELECT
-            mi.item_id, mi.name, mi.description,
-            mi.price::float    AS price,
-            c.name              AS category,
-            r.restaurant_id,
-            r.business_name     AS restaurant_name,
-            r.address           AS restaurant_address
-        FROM menu_item mi
-        JOIN category c   ON c.category_id   = mi.category_id
-        JOIN menu m       ON m.menu_id       = c.menu_id
-        JOIN restaurant r ON r.restaurant_id = m.restaurant_id
-        WHERE m.restaurant_id = $1
-          AND mi.embedding IS NOT NULL
-        ORDER BY mi.embedding <=> $2::vector
-        LIMIT $3
-    `, [restaurantId, vectorLiteral, TOP_K]);
+    const { rows } = await pool.query(
+        MENU_ITEM_SELECT +
+        `  AND m.restaurant_id = $1
+         ORDER BY mi.embedding <=> $2::vector
+         LIMIT $3`,
+        [restaurantId, vectorLiteral, TOP_K]
+    );
     return rows;
 }
 
-async function searchAllRestaurants(vectorLiteral) {
-    const { rows } = await pool.query(`
-        SELECT
-            mi.item_id, mi.name, mi.description,
-            mi.price::float    AS price,
-            c.name              AS category,
-            r.restaurant_id,
-            r.business_name     AS restaurant_name,
-            r.address           AS restaurant_address
-        FROM menu_item mi
-        JOIN category c   ON c.category_id   = mi.category_id
-        JOIN menu m       ON m.menu_id       = c.menu_id
-        JOIN restaurant r ON r.restaurant_id = m.restaurant_id
-        WHERE mi.embedding IS NOT NULL
-        ORDER BY mi.embedding <=> $1::vector
-        LIMIT $2
-    `, [vectorLiteral, TOP_K]);
-    return rows;
+async function searchAllRestaurants(vectorLiteral, districtFilter = null) {
+    if (districtFilter) {
+        const { rows } = await pool.query(
+            MENU_ITEM_SELECT +
+            `  AND r.address ILIKE $3
+             ORDER BY mi.embedding <=> $1::vector
+             LIMIT $2`,
+            [vectorLiteral, FETCH_K, `%${districtFilter}%`]
+        );
+        if (rows.length > 0) return diversifyByRestaurant(rows);
+        // DB'de o semtten hiç sonuç yok — LLM'e boş context göndermek yerine
+        // global arama yap; sistem prompt'u "o bölgede mekan yok" demesini sağlar.
+        console.log(`[MenuBot] "${districtFilter}" için sonuç yok, global aramaya düşülüyor.`);
+    }
+
+    const { rows } = await pool.query(
+        MENU_ITEM_SELECT +
+        `ORDER BY mi.embedding <=> $1::vector
+         LIMIT $2`,
+        [vectorLiteral, FETCH_K]
+    );
+    return diversifyByRestaurant(rows);
 }
 
-// ─── Stage 3: Grounded Generation (Groq llama-3.3-70b-versatile) ────────────
+// ─── Stage 3: Grounded Generation ────────────────────────────────────────────
 
 function buildContextBlock(items) {
-    if (items.length === 0) {
-        return 'Veritabanında ilgili menü öğesi bulunamadı.';
-    }
+    if (items.length === 0) return 'Veritabanında ilgili menü öğesi bulunamadı.';
     return items.map((it, i) => {
         const parts = [
             `Restoran: ${it.restaurant_name}`,
@@ -299,7 +315,7 @@ function buildContextBlock(items) {
             `Yemek: ${it.name}`,
             `Fiyat: ${it.price} TL`,
         ];
-        if (it.category) parts.push(`Kategori: ${it.category}`);
+        if (it.category)    parts.push(`Kategori: ${it.category}`);
         if (it.description) parts.push(`Açıklama: ${it.description}`);
         return `${i + 1}. ${parts.join(', ')}`;
     }).join('\n');
@@ -307,26 +323,27 @@ function buildContextBlock(items) {
 
 async function generateGroundedAnswer({ message, items, mode, restaurantName }) {
     const contextBlock = buildContextBlock(items);
+    const safeMessage  = sanitizeForPrompt(message.trim());
 
-    const safeMessage = sanitizeForPrompt(message.trim());
     const userPrompt = mode === 'specific'
-        ? `Restoran: ${restaurantName}\n\n` +
-          `İlgili menü öğeleri (alaka sırasına göre):\n${contextBlock}\n\n` +
-          `Müşterinin sorusu: "${safeMessage}"`
-        : `Genel gurme modu — tüm restoranların menüsünden alaka skorlarına göre çekilen öğeler:\n${contextBlock}\n\n` +
-          `Müşterinin sorusu: "${safeMessage}"`;
+        ? `Restoran: ${restaurantName}\n\nİlgili menü öğeleri (alaka sırasına göre):\n${contextBlock}\n\nMüşterinin sorusu: "${safeMessage}"`
+        : `Genel gurme modu — tüm restoranların menüsünden alaka skorlarına göre çekilen öğeler:\n${contextBlock}\n\nMüşterinin sorusu: "${safeMessage}"`;
 
     const completion = await runAICall(
         'answer-generation',
-        () => groq.chat.completions.create({
-            model: ANSWER_MODEL,
-            messages: [
-                { role: 'system', content: ANSWER_SYSTEM_PROMPT },
-                { role: 'user',   content: userPrompt }
-            ],
-            temperature: 0.7,
-            max_tokens: 600,
-        })
+        () => withTimeout(
+            groq.chat.completions.create({
+                model:    ANSWER_MODEL,
+                messages: [
+                    { role: 'system', content: ANSWER_SYSTEM_PROMPT },
+                    { role: 'user',   content: userPrompt },
+                ],
+                temperature: 0.7,
+                max_tokens:  600,
+            }),
+            API_TIMEOUT_MS,
+            'answer-generation'
+        )
     );
 
     return (completion?.choices?.[0]?.message?.content || '').trim();
@@ -343,84 +360,95 @@ exports.ask = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Boş bir mesaj gönderemezsiniz.' });
         }
         if (message.length > MAX_MESSAGE_LEN) {
-            return res.status(400).json({
-                success: false,
-                message: `Mesaj çok uzun (max ${MAX_MESSAGE_LEN} karakter).`
-            });
+            return res.status(400).json({ success: false, message: `Mesaj çok uzun (max ${MAX_MESSAGE_LEN} karakter).` });
         }
 
         let rid = null;
         if (restaurantId !== undefined && restaurantId !== null) {
-            const parsed = typeof restaurantId === 'number'
-                ? restaurantId
-                : parseInt(restaurantId, 10);
+            const parsed = typeof restaurantId === 'number' ? restaurantId : parseInt(restaurantId, 10);
             if (!Number.isNaN(parsed) && parsed > 0) rid = parsed;
         }
         const mode = rid ? 'specific' : 'general';
-        let restaurantName = null;
 
-        if (rid) {
-            const r = await pool.query(
-                'SELECT business_name FROM restaurant WHERE restaurant_id = $1',
-                [rid]
-            );
-            if (r.rows.length === 0) {
-                return res.status(404).json({ success: false, message: 'Restoran bulunamadı.' });
-            }
-            restaurantName = r.rows[0].business_name;
-        }
+        // ─ PARALEL FAZ ─────────────────────────────────────────────────────
+        // Embedding, intent sonucuna bakmaksızın başlatılır. off-topic veya
+        // chit-chat çıkması halinde sonuç sessizce atılır. Yemek sorgularında
+        // (~%90) Groq + Gemini round-trip paralel çalışarak ~250-350ms kazanılır.
+        const [intentResult, embedResult, restaurantResult] = await Promise.allSettled([
+            classifyIntent(message),
+            embedQuery(message),
+            rid
+                ? pool.query('SELECT business_name FROM restaurant WHERE restaurant_id = $1', [rid])
+                : Promise.resolve(null),
+        ]);
 
-        // ─ STAGE 1: Intent Gate (fail-open) ────────────────────────────────
-        const onTopic = await isFoodRelated(message);
-        if (!onTopic) {
+        // ─ Intent ──────────────────────────────────────────────────────────
+        const { intent, district } = intentResult.status === 'fulfilled'
+            ? intentResult.value
+            : { intent: 'food', district: null }; // fail-open
+
+        if (intent === 'off-topic') {
             return res.status(200).json({
                 success: true,
-                data: {
-                    answer: OFF_TOPIC_RESPONSE,
-                    referenced_items: [],
-                    intent_off_topic: true,
-                    mode
-                }
+                data: { answer: OFF_TOPIC_RESPONSE, referenced_items: [], intent_off_topic: true, mode },
             });
         }
 
-        // ─ STAGE 2: Vector Search ──────────────────────────────────────────
-        const vectorLiteral = await embedQuery(message);
-        const items = rid
-            ? await searchSpecificRestaurant(rid, vectorLiteral)
-            : await searchAllRestaurants(vectorLiteral);
+        // ─ Restoran doğrulama ───────────────────────────────────────────────
+        if (rid) {
+            if (restaurantResult.status === 'rejected') throw restaurantResult.reason;
+            if (restaurantResult.value.rows.length === 0) {
+                return res.status(404).json({ success: false, message: 'Restoran bulunamadı.' });
+            }
+        }
+        const restaurantName = restaurantResult.value?.rows?.[0]?.business_name ?? null;
 
-        // ─ STAGE 3: Grounded Generation (Groq Llama 3.3 70B) ───────────────
-        const answer = await generateGroundedAnswer({
-            message, items, mode, restaurantName
-        });
-
-        if (!answer) {
-            return res.status(502).json({ success: false, message: ERROR_MESSAGES.unknown });
+        // ─ Chit-chat kısa devresi: Stage 2 atlanır ─────────────────────────
+        if (intent === 'chit-chat') {
+            const answer = await generateGroundedAnswer({ message, items: [], mode, restaurantName });
+            if (!answer) return res.status(502).json({ success: false, message: ERROR_MESSAGES.unknown });
+            return res.status(200).json({
+                success: true,
+                data: { answer, referenced_items: [], intent_off_topic: false, mode },
+            });
         }
 
-        res.status(200).json({
+        // ─ Yemek sorgusu: embedding sonucunu kullan ─────────────────────────
+        if (embedResult.status === 'rejected') throw embedResult.reason;
+        const vectorLiteral = embedResult.value;
+
+        const items = rid
+            ? await searchSpecificRestaurant(rid, vectorLiteral)
+            : await searchAllRestaurants(vectorLiteral, district);
+
+        // ─ STAGE 3: Grounded Generation ────────────────────────────────────
+        const answer = await generateGroundedAnswer({ message, items, mode, restaurantName });
+
+        if (!answer) return res.status(502).json({ success: false, message: ERROR_MESSAGES.unknown });
+
+        return res.status(200).json({
             success: true,
             data: {
                 answer,
                 referenced_items: items.map(it => ({
-                    item_id: it.item_id,
-                    name: it.name,
-                    price: it.price,
-                    category: it.category,
-                    restaurant_id: it.restaurant_id,
-                    restaurant_name: it.restaurant_name,
-                    restaurant_address: it.restaurant_address
+                    item_id:            it.item_id,
+                    name:               it.name,
+                    price:              it.price,
+                    category:           it.category,
+                    restaurant_id:      it.restaurant_id,
+                    restaurant_name:    it.restaurant_name,
+                    restaurant_address: it.restaurant_address,
                 })),
                 intent_off_topic: false,
-                mode
-            }
+                mode,
+            },
         });
+
     } catch (err) {
         if (err?.aiClassified) {
             return res.status(err.aiClassified.status).json({
                 success: false,
-                message: err.aiClassified.userMessage
+                message: err.aiClassified.userMessage,
             });
         }
         const firstLine = String(err?.message || err).split('\n')[0].slice(0, 220);

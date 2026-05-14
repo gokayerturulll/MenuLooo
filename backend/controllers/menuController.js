@@ -152,6 +152,19 @@ exports.createMenuItem = async (req, res) => {
             });
         }
 
+        const trimmedName = typeof name === 'string' ? name.trim() : '';
+        if (trimmedName.length === 0 || trimmedName.length > 255) {
+            return res.status(400).json({ success: false, message: 'Ürün adı 1-255 karakter arasında olmalıdır.' });
+        }
+        const parsedPrice = Number(price);
+        if (isNaN(parsedPrice) || parsedPrice < 0 || parsedPrice > 99999.99) {
+            return res.status(400).json({ success: false, message: 'Geçersiz fiyat. (0 - 99999.99 arasında olmalı)' });
+        }
+        const trimmedCategory = typeof category === 'string' ? category.trim() : '';
+        if (trimmedCategory.length === 0 || trimmedCategory.length > 100) {
+            return res.status(400).json({ success: false, message: 'Kategori adı 1-100 karakter arasında olmalıdır.' });
+        }
+
         // Sahiplik kontrolü
         const ownerCheck = await pool.query(
             'SELECT owner_id FROM restaurant WHERE restaurant_id = $1',
@@ -275,7 +288,7 @@ exports.deleteMenuItem = async (req, res) => {
 // Yeşil Menü (mevcut)
 // ============================================================================
 
-exports.getGreenMenu = async (req, res) => {
+exports.getGreenMenu = async (_req, res) => {
     try {
         const query = `
             SELECT gm.green_item_id, gm.quantity, gm.discounted_price, gm.expiration_time, 

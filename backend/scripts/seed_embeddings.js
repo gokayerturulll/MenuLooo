@@ -43,16 +43,23 @@ async function prepareSchema() {
 
     await pool.query('CREATE EXTENSION IF NOT EXISTS vector');
 
-    // Eski boyutta (örn. 1536) veriler ALTER TYPE'ı engelliyor; tamamen drop edip
-    // 768 boyutlu olarak yeniden yaratıyoruz. Vektörler bu script tarafından
-    // sıfırdan üretileceği için veri kaybı sorun değil.
+    // Eski boyutta (örn. 1536) veriler ALTER TYPE'ı engelliyor; DROP + ADD ile boyutu güncelle.
+    // DROP COLUMN beraberinde eski HNSW index'ini de siler — aşağıda yeniden oluşturuluyor.
     await pool.query('ALTER TABLE menu_item DROP COLUMN IF EXISTS embedding');
     await pool.query(`
         ALTER TABLE menu_item
         ADD COLUMN embedding vector(${EMBEDDING_DIM})
     `);
 
-    console.log(`   ↳ menu_item.embedding sıfırlandı → vector(${EMBEDDING_DIM}) hazır.\n`);
+    // Vektör aramaları için HNSW index — column drop sonrası yeniden oluşturulması şart.
+    // ef_construction=128 ve m=16 değerleri 450 kayıt için dengeli hız/doğruluk sunar.
+    await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_menu_item_embedding
+        ON menu_item USING hnsw (embedding vector_cosine_ops)
+        WITH (m = 16, ef_construction = 128)
+    `);
+
+    console.log(`   ↳ menu_item.embedding sıfırlandı → vector(${EMBEDDING_DIM}) + HNSW index hazır.\n`);
 }
 
 // ----------------------------------------------------------------------------

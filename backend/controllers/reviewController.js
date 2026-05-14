@@ -1,10 +1,11 @@
 // backend/controllers/reviewController.js
-// Restoran yorum/değerlendirme controller'ı.
 //
-//   GET  /api/restaurants/:id/reviews   → public (kullanıcı adıyla join'li liste)
-//   POST /api/restaurants/:id/reviews   → authMiddleware (içerik + opsiyonel puanlar)
+//   GET  /api/restaurants/:id/reviews   → public
+//   POST /api/restaurants/:id/reviews   → authMiddleware
 
 const pool = require('../config/db');
+
+const CONTENT_MAX_LEN = 2000;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -35,11 +36,8 @@ const REVIEW_SELECT_COLUMNS = `
 
 exports.getRestaurantReviews = async (req, res) => {
     const restaurantId = parseInt(req.params.id, 10);
-    if (!Number.isInteger(restaurantId)) {
-        return res.status(400).json({
-            success: false,
-            message: 'Geçersiz restoran ID.'
-        });
+    if (!Number.isInteger(restaurantId) || restaurantId <= 0) {
+        return res.status(400).json({ success: false, message: 'Geçersiz restoran ID.' });
     }
 
     try {
@@ -52,17 +50,10 @@ exports.getRestaurantReviews = async (req, res) => {
             [restaurantId]
         );
 
-        res.status(200).json({
-            success: true,
-            count: rows.length,
-            data: rows
-        });
+        res.status(200).json({ success: true, count: rows.length, data: rows });
     } catch (err) {
         console.error('Error fetching reviews:', err.message);
-        res.status(500).json({
-            success: false,
-            message: 'Yorumlar getirilirken sunucu hatası oluştu.'
-        });
+        res.status(500).json({ success: false, message: 'Yorumlar getirilirken sunucu hatası oluştu.' });
     }
 };
 
@@ -70,23 +61,24 @@ exports.getRestaurantReviews = async (req, res) => {
 
 exports.addReview = async (req, res) => {
     const restaurantId = parseInt(req.params.id, 10);
-    if (!Number.isInteger(restaurantId)) {
-        return res.status(400).json({
-            success: false,
-            message: 'Geçersiz restoran ID.'
-        });
+    if (!Number.isInteger(restaurantId) || restaurantId <= 0) {
+        return res.status(400).json({ success: false, message: 'Geçersiz restoran ID.' });
     }
 
     const userId = req.user?.user_id;
     if (!userId) {
-        return res.status(401).json({
-            success: false,
-            message: 'Oturum bilgisi alınamadı.'
-        });
+        return res.status(401).json({ success: false, message: 'Oturum bilgisi alınamadı.' });
     }
 
     const { content, rating_taste, rating_service, rating_attitude } = req.body || {};
     const trimmedContent = typeof content === 'string' ? content.trim() : '';
+
+    if (trimmedContent.length > CONTENT_MAX_LEN) {
+        return res.status(400).json({
+            success: false,
+            message: `Yorum metni en fazla ${CONTENT_MAX_LEN} karakter olabilir.`
+        });
+    }
 
     let taste, service, attitude;
     try {
@@ -97,7 +89,6 @@ exports.addReview = async (req, res) => {
         return res.status(400).json({ success: false, message: err.message });
     }
 
-    // En az içerik veya bir puan zorunlu — boş yorum kabul etme
     const hasAnyRating = taste !== null || service !== null || attitude !== null;
     if (!trimmedContent && !hasAnyRating) {
         return res.status(400).json({
@@ -107,16 +98,12 @@ exports.addReview = async (req, res) => {
     }
 
     try {
-        // Restoran var mı? (FK violation'dan önce daha temiz hata mesajı)
         const exists = await pool.query(
             'SELECT 1 FROM restaurant WHERE restaurant_id = $1',
             [restaurantId]
         );
         if (exists.rowCount === 0) {
-            return res.status(404).json({
-                success: false,
-                message: 'Restoran bulunamadı.'
-            });
+            return res.status(404).json({ success: false, message: 'Restoran bulunamadı.' });
         }
 
         const { rows } = await pool.query(
@@ -129,25 +116,12 @@ exports.addReview = async (req, res) => {
             SELECT ${REVIEW_SELECT_COLUMNS}
             FROM inserted r
             JOIN "user" u ON u.user_id = r.user_id`,
-            [
-                restaurantId,
-                userId,
-                trimmedContent || null,
-                taste,
-                service,
-                attitude
-            ]
+            [restaurantId, userId, trimmedContent || null, taste, service, attitude]
         );
 
-        res.status(201).json({
-            success: true,
-            data: rows[0]
-        });
+        res.status(201).json({ success: true, data: rows[0] });
     } catch (err) {
         console.error('Error creating review:', err.message);
-        res.status(500).json({
-            success: false,
-            message: 'Yorum kaydedilirken sunucu hatası oluştu.'
-        });
+        res.status(500).json({ success: false, message: 'Yorum kaydedilirken sunucu hatası oluştu.' });
     }
 };

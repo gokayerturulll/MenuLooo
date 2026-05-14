@@ -1,40 +1,13 @@
-//
-//  RoomListView.swift
-//  MenuLo
-//
-//  MenuLo/Views/Room/RoomListView.swift
-//
-//  Grup Karar Odası — Arkadaş gruplarıyla ortak yemek kararı.
-//  Oda oluşturma: yemek kategorisi butonları + ortak bütçe + Max Distance slider.
-//
-
 import SwiftUI
 
-// MARK: - Mock Oda Modeli
-private struct DecisionRoom: Identifiable {
-    let id = UUID()
-    let name: String
-    let host: String
-    let participants: Int
-    let categories: [String]
-    let budget: Int
-    let maxDistance: Int  // km
-    let status: String    // "active", "deciding", "done"
-    let emoji: String
-}
-
 // MARK: - RoomListView
+
 struct RoomListView: View {
 
-    @State private var showCreateSheet = false
-    @State private var showJoinSheet   = false
-    @State private var joinCode        = ""
-
-    private let mockRooms: [DecisionRoom] = [
-        DecisionRoom(name: "Cuma Akşamı 🍕", host: "Selin T.", participants: 4, categories: ["Pizza", "Burger"], budget: 150, maxDistance: 3, status: "deciding", emoji: "🍕"),
-        DecisionRoom(name: "Öğle Yemeği Kararı", host: "Mert A.", participants: 3, categories: ["Salad", "Sushi"], budget: 100, maxDistance: 1, status: "active", emoji: "🥗"),
-        DecisionRoom(name: "Doğum Günü Akşamı", host: "Zeynep B.", participants: 6, categories: ["Steak", "Pizza"], budget: 250, maxDistance: 5, status: "done", emoji: "🎂"),
-    ]
+    @EnvironmentObject private var viewModel: RoomViewModel
+    @State private var showCreateSheet   = false
+    @State private var showJoinSheet     = false
+    @State private var showActiveRoom    = false
 
     var body: some View {
         NavigationStack {
@@ -43,17 +16,12 @@ struct RoomListView: View {
 
                 VStack(spacing: 0) {
 
-                    // MARK: - Header Aksiyon Butonları
+                    // MARK: Aksiyon Butonları
                     HStack(spacing: MenuLoTheme.Spacing.md) {
-                        // Oda Oluştur
-                        Button {
-                            showCreateSheet = true
-                        } label: {
+                        Button { showCreateSheet = true } label: {
                             HStack(spacing: 8) {
-                                Image(systemName: "plus.circle.fill")
-                                    .font(.title3)
-                                Text("Oda Oluştur")
-                                    .font(MenuLoTheme.Fonts.button)
+                                Image(systemName: "plus.circle.fill").font(.title3)
+                                Text("Oda Oluştur").font(MenuLoTheme.Fonts.button)
                             }
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
@@ -63,15 +31,10 @@ struct RoomListView: View {
                             .shadow(color: MenuLoTheme.Colors.primary.opacity(0.35), radius: 8)
                         }
 
-                        // Odaya Katıl
-                        Button {
-                            showJoinSheet = true
-                        } label: {
+                        Button { showJoinSheet = true } label: {
                             HStack(spacing: 8) {
-                                Image(systemName: "qrcode.viewfinder")
-                                    .font(.title3)
-                                Text("Katıl")
-                                    .font(MenuLoTheme.Fonts.button)
+                                Image(systemName: "qrcode.viewfinder").font(.title3)
+                                Text("Katıl").font(MenuLoTheme.Fonts.button)
                             }
                             .foregroundColor(MenuLoTheme.Colors.primary)
                             .frame(maxWidth: .infinity)
@@ -86,151 +49,220 @@ struct RoomListView: View {
                     }
                     .padding(MenuLoTheme.Spacing.lg)
 
-                    // MARK: - Aktif Odalar
-                    if mockRooms.isEmpty {
-                        Spacer()
-                        emptyState
-                        Spacer()
-                    } else {
-                        ScrollView {
-                            LazyVStack(spacing: MenuLoTheme.Spacing.md) {
-                                ForEach(mockRooms) { room in
-                                    RoomCard(room: room)
-                                }
-                            }
-                            .padding(.horizontal, MenuLoTheme.Spacing.lg)
-                            .padding(.bottom, MenuLoTheme.Spacing.xl)
+                    // MARK: Aktif oda kartı (varsa)
+                    if let room = viewModel.currentRoom {
+                        ActiveRoomBanner(
+                            room: room,
+                            participantCount: viewModel.participantIds.count,
+                            isSocketConnected: viewModel.isSocketConnected
+                        ) {
+                            showActiveRoom = true
                         }
+                        .padding(.horizontal, MenuLoTheme.Spacing.lg)
+                        .padding(.bottom, MenuLoTheme.Spacing.md)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+
+                    // MARK: Geçmiş / mock odalar
+                    ScrollView {
+                        LazyVStack(spacing: MenuLoTheme.Spacing.md) {
+                            ForEach(mockRooms) { room in RoomCard(room: room) }
+                        }
+                        .padding(.horizontal, MenuLoTheme.Spacing.lg)
+                        .padding(.bottom, MenuLoTheme.Spacing.xl)
                     }
                 }
             }
             .navigationTitle("Karar Odaları")
             .navigationBarTitleDisplayMode(.large)
+            .animation(.spring(response: 0.35), value: viewModel.currentRoom?.roomId)
             .sheet(isPresented: $showCreateSheet) {
-                CreateRoomSheet()
+                CreateRoomSheet(viewModel: viewModel)
             }
             .sheet(isPresented: $showJoinSheet) {
-                JoinRoomSheet()
+                JoinRoomSheet(viewModel: viewModel)
+            }
+            .sheet(isPresented: $showActiveRoom) {
+                if let room = viewModel.currentRoom {
+                    ActiveRoomView(
+                        room: room,
+                        participantIds: viewModel.participantIds,
+                        onLeave: { viewModel.leaveCurrentRoom() }
+                    )
+                }
             }
         }
     }
 
-    private var emptyState: some View {
-        VStack(spacing: MenuLoTheme.Spacing.md) {
-            Image(systemName: "person.3.fill")
-                .font(.system(size: 64))
-                .foregroundColor(MenuLoTheme.Colors.primary)
-            Text("Henüz oda yok")
-                .font(MenuLoTheme.Fonts.title)
-                .foregroundColor(MenuLoTheme.Colors.textPrimary)
-            Text("Arkadaşlarınla oda oluştur veya bir odaya katıl.")
-                .font(MenuLoTheme.Fonts.body)
-                .foregroundColor(MenuLoTheme.Colors.textSecondary)
-                .multilineTextAlignment(.center)
+    // MARK: Mock geçmiş odalar (ileri fazda API'den gelecek)
+    private let mockRooms: [MockRoom] = [
+        MockRoom(name: "Cuma Akşamı 🍕", host: "Selin T.", participants: 4,
+                 categories: ["Pizza", "Burger"], budget: 150, maxDistance: 3, status: "deciding", emoji: "🍕"),
+        MockRoom(name: "Öğle Yemeği Kararı", host: "Mert A.", participants: 3,
+                 categories: ["Salad", "Sushi"], budget: 100, maxDistance: 1, status: "active", emoji: "🥗"),
+        MockRoom(name: "Doğum Günü Akşamı", host: "Zeynep B.", participants: 6,
+                 categories: ["Steak", "Pizza"], budget: 250, maxDistance: 5, status: "done", emoji: "🎂"),
+    ]
+}
+
+// MARK: - Aktif Oda Banner
+
+private struct ActiveRoomBanner: View {
+    let room: Room
+    let participantCount: Int
+    let isSocketConnected: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: MenuLoTheme.Spacing.md) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(room.name)
+                        .font(MenuLoTheme.Fonts.body).fontWeight(.semibold)
+                        .foregroundColor(MenuLoTheme.Colors.textPrimary)
+
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(isSocketConnected ? MenuLoTheme.Colors.success : .gray)
+                            .frame(width: 8, height: 8)
+                        Text(isSocketConnected ? "Canlı" : "Bağlanıyor...")
+                            .font(MenuLoTheme.Fonts.caption)
+                            .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                    }
+                }
+
+                Spacer()
+
+                // PIN etiketi — arkadaşlar bu kodu kullanarak katılır
+                VStack(spacing: 2) {
+                    Text("PIN")
+                        .font(.caption2).fontWeight(.semibold)
+                        .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                    Text(room.pinCode)
+                        .font(.system(.title3, design: .monospaced)).fontWeight(.bold)
+                        .foregroundColor(MenuLoTheme.Colors.primary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(MenuLoTheme.Colors.primary.opacity(0.08))
+                .cornerRadius(MenuLoTheme.CornerRadius.large)
+
+                Image(systemName: "chevron.right")
+                    .font(.footnote).foregroundColor(MenuLoTheme.Colors.textSecondary)
+            }
+            .padding(MenuLoTheme.Spacing.md)
+            .background(MenuLoTheme.Colors.cardBackground)
+            .cornerRadius(MenuLoTheme.CornerRadius.large)
+            .shadow(color: MenuLoTheme.Colors.primary.opacity(0.12), radius: 8, x: 0, y: 2)
         }
-        .padding(.horizontal, MenuLoTheme.Spacing.xl)
+        .buttonStyle(.plain)
     }
 }
 
-// MARK: - Oda Kartı
-private struct RoomCard: View {
-    let room: DecisionRoom
+// MARK: - Aktif Oda Sayfası (PIN + katılımcılar)
 
-    var statusColor: Color {
-        switch room.status {
-        case "active":   return MenuLoTheme.Colors.success
-        case "deciding": return MenuLoTheme.Colors.primary
-        case "done":     return MenuLoTheme.Colors.textSecondary
-        default:         return MenuLoTheme.Colors.textSecondary
-        }
-    }
-    var statusLabel: String {
-        switch room.status {
-        case "active":   return "Aktif"
-        case "deciding": return "Karar Veriliyor"
-        case "done":     return "Tamamlandı"
-        default:         return ""
-        }
-    }
+struct ActiveRoomView: View {
+    let room: Room
+    let participantIds: [Int]
+    let onLeave: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(alignment: .leading, spacing: MenuLoTheme.Spacing.md) {
-            HStack {
-                Text(room.emoji)
-                    .font(.system(size: 32))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(room.name)
-                        .font(MenuLoTheme.Fonts.body)
-                        .fontWeight(.semibold)
-                        .foregroundColor(MenuLoTheme.Colors.textPrimary)
-                    Text("Oluşturan: \(room.host)")
+        NavigationStack {
+            VStack(spacing: MenuLoTheme.Spacing.xl) {
+
+                // PIN Kutusu
+                VStack(spacing: MenuLoTheme.Spacing.sm) {
+                    Text("Oda PIN'i")
+                        .font(MenuLoTheme.Fonts.subtitle)
+                        .foregroundColor(MenuLoTheme.Colors.textSecondary)
+
+                    Text(room.pinCode)
+                        .font(.system(size: 48, weight: .bold, design: .monospaced))
+                        .foregroundColor(MenuLoTheme.Colors.primary)
+                        .tracking(8)
+
+                    Text("Arkadaşlarını davet etmek için bu kodu paylaş")
                         .font(MenuLoTheme.Fonts.caption)
                         .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                        .multilineTextAlignment(.center)
                 }
-                Spacer()
-                // Durum rozeti
-                Text(statusLabel)
-                    .font(.caption2)
-                    .fontWeight(.semibold)
-                    .foregroundColor(statusColor)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(statusColor.opacity(0.12))
-                    .clipShape(Capsule())
-            }
+                .padding(MenuLoTheme.Spacing.xl)
+                .frame(maxWidth: .infinity)
+                .background(MenuLoTheme.Colors.cardBackground)
+                .cornerRadius(MenuLoTheme.CornerRadius.large)
+                .shadow(color: MenuLoTheme.Colors.primary.opacity(0.1), radius: 10)
+                .padding(.horizontal, MenuLoTheme.Spacing.lg)
 
-            // Kategoriler
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(room.categories, id: \.self) { cat in
-                        Text(cat)
-                            .font(.caption2)
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(MenuLoTheme.Colors.primary)
-                            .clipShape(Capsule())
-                    }
+                // Gerçek QR Kod — CoreImage ile üretildi
+                if let qr = RoomViewModel.generateQRImage(for: room.pinCode) {
+                    Image(uiImage: qr)
+                        .interpolation(.none)       // piksel bozulmasını önler
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 200, height: 200)
+                        .padding(MenuLoTheme.Spacing.md)
+                        .background(Color.white)
+                        .cornerRadius(MenuLoTheme.CornerRadius.large)
+                        .shadow(color: .black.opacity(0.08), radius: 8)
+                } else {
+                    Image(systemName: "qrcode")
+                        .font(.system(size: 80))
+                        .foregroundColor(MenuLoTheme.Colors.primary.opacity(0.3))
                 }
+
+                // Katılımcı sayısı
+                HStack {
+                    Image(systemName: "person.2.fill")
+                        .foregroundColor(MenuLoTheme.Colors.primary)
+                    Text("\(participantIds.count) katılımcı")
+                        .font(MenuLoTheme.Fonts.body)
+                        .foregroundColor(MenuLoTheme.Colors.textPrimary)
+                }
+
+                Spacer()
+
+                // Odadan Ayrıl
+                Button {
+                    onLeave()
+                    dismiss()
+                } label: {
+                    Text("Odadan Ayrıl")
+                        .font(MenuLoTheme.Fonts.button)
+                        .foregroundColor(.red)
+                        .frame(maxWidth: .infinity)
+                        .padding(MenuLoTheme.Spacing.md)
+                        .background(Color.red.opacity(0.08))
+                        .cornerRadius(MenuLoTheme.CornerRadius.large)
+                }
+                .padding(.horizontal, MenuLoTheme.Spacing.lg)
+                .padding(.bottom, MenuLoTheme.Spacing.xl)
             }
-
-            HStack {
-                // Katılımcılar
-                Label("\(room.participants) kişi", systemImage: "person.2.fill")
-                    .font(MenuLoTheme.Fonts.caption)
-                    .foregroundColor(MenuLoTheme.Colors.textSecondary)
-
-                Spacer()
-
-                // Bütçe
-                Label("₺\(room.budget)/kişi", systemImage: "turkishlirasign.circle")
-                    .font(MenuLoTheme.Fonts.caption)
-                    .foregroundColor(MenuLoTheme.Colors.textSecondary)
-
-                Spacer()
-
-                // Mesafe
-                Label("\(room.maxDistance) km", systemImage: "location.circle")
-                    .font(MenuLoTheme.Fonts.caption)
-                    .foregroundColor(MenuLoTheme.Colors.textSecondary)
+            .padding(.top, MenuLoTheme.Spacing.lg)
+            .background(MenuLoTheme.Colors.backgroundLight.ignoresSafeArea())
+            .navigationTitle(room.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Kapat") { dismiss() }
+                        .foregroundColor(MenuLoTheme.Colors.primary)
+                }
             }
         }
-        .padding(MenuLoTheme.Spacing.lg)
-        .background(MenuLoTheme.Colors.cardBackground)
-        .cornerRadius(MenuLoTheme.CornerRadius.large)
-        .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
     }
 }
 
 // MARK: - Oda Oluşturma Sheet
+
 struct CreateRoomSheet: View {
+    @ObservedObject var viewModel: RoomViewModel
     @Environment(\.dismiss) private var dismiss
 
-    @State private var roomName    = ""
-    @State private var budget: Double = 100
+    @State private var roomName           = ""
+    @State private var budget: Double     = 100
     @State private var maxDistance: Double = 3
     @State private var selectedCategories: Set<String> = []
-    @State private var isCreating = false
 
     let foodCategories: [(name: String, emoji: String)] = [
         ("Pizza", "🍕"), ("Hamburger", "🍔"), ("Salad", "🥗"),
@@ -239,16 +271,22 @@ struct CreateRoomSheet: View {
         ("Seafood", "🦐"), ("Ramen", "🍜"), ("Vegan", "🌱"),
     ]
 
-    var isFormValid: Bool {
-        !roomName.isEmpty && !selectedCategories.isEmpty
-    }
+    var isFormValid: Bool { !roomName.isEmpty && !selectedCategories.isEmpty }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: MenuLoTheme.Spacing.lg) {
 
-                    // --- Oda Adı ---
+                    // Hata mesajı
+                    if let err = viewModel.errorMessage {
+                        Text(err)
+                            .font(MenuLoTheme.Fonts.caption)
+                            .foregroundColor(.red)
+                            .padding(.horizontal, MenuLoTheme.Spacing.lg)
+                    }
+
+                    // Oda Adı
                     VStack(alignment: .leading, spacing: MenuLoTheme.Spacing.sm) {
                         SectionHeader(title: "Oda Bilgileri", icon: "door.left.hand.open")
                         CustomTextField(
@@ -259,11 +297,10 @@ struct CreateRoomSheet: View {
                         .padding(.horizontal, MenuLoTheme.Spacing.lg)
                     }
 
-                    // --- Yemek Kategorileri ---
+                    // Kategoriler
                     VStack(alignment: .leading, spacing: MenuLoTheme.Spacing.md) {
                         SectionHeader(title: "Yemek Kategorileri", icon: "fork.knife")
                             .padding(.horizontal, MenuLoTheme.Spacing.lg)
-
                         Text("En az 1 kategori seç")
                             .font(MenuLoTheme.Fonts.caption)
                             .foregroundColor(MenuLoTheme.Colors.textSecondary)
@@ -275,8 +312,7 @@ struct CreateRoomSheet: View {
                         ) {
                             ForEach(foodCategories, id: \.name) { cat in
                                 FoodCategoryButton(
-                                    name: cat.name,
-                                    emoji: cat.emoji,
+                                    name: cat.name, emoji: cat.emoji,
                                     isSelected: selectedCategories.contains(cat.name)
                                 ) {
                                     withAnimation(.spring(response: 0.2)) {
@@ -292,85 +328,37 @@ struct CreateRoomSheet: View {
                         .padding(.horizontal, MenuLoTheme.Spacing.lg)
                     }
 
-                    // --- Ortak Bütçe ---
-                    VStack(alignment: .leading, spacing: MenuLoTheme.Spacing.md) {
-                        SectionHeader(title: "Ortak Bütçe", icon: "turkishlirasign.circle.fill")
-                            .padding(.horizontal, MenuLoTheme.Spacing.lg)
+                    // Bütçe
+                    SliderCard(
+                        title: "Ortak Bütçe", icon: "turkishlirasign.circle.fill",
+                        valueLabel: "₺\(Int(budget)) / kişi",
+                        value: $budget, range: 50...1000, step: 25,
+                        minLabel: "₺50", maxLabel: "₺1000",
+                        tint: MenuLoTheme.Colors.primary
+                    )
 
-                        VStack(spacing: MenuLoTheme.Spacing.sm) {
-                            HStack {
-                                Text("₺\(Int(budget))")
-                                    .font(.system(size: 32, weight: .bold, design: .rounded))
-                                    .foregroundColor(MenuLoTheme.Colors.primary)
-                                Text("/ kişi")
-                                    .font(MenuLoTheme.Fonts.body)
-                                    .foregroundColor(MenuLoTheme.Colors.textSecondary)
-                                    .padding(.top, 8)
-                                Spacer()
-                            }
+                    // Max Mesafe
+                    SliderCard(
+                        title: "Max Mesafe", icon: "location.circle.fill",
+                        valueLabel: "\(String(format: "%.1f", maxDistance)) km",
+                        value: $maxDistance, range: 0.5...20, step: 0.5,
+                        minLabel: "0.5 km", maxLabel: "20 km",
+                        tint: Color(hex: "#6C5CE7")
+                    )
 
-                            Slider(value: $budget, in: 50...1000, step: 25)
-                                .tint(MenuLoTheme.Colors.primary)
-
-                            HStack {
-                                Text("₺50")
-                                Spacer()
-                                Text("₺1000")
-                            }
-                            .font(.caption)
-                            .foregroundColor(MenuLoTheme.Colors.textSecondary)
-                        }
-                        .padding(MenuLoTheme.Spacing.lg)
-                        .background(MenuLoTheme.Colors.cardBackground)
-                        .cornerRadius(MenuLoTheme.CornerRadius.large)
-                        .shadow(color: .black.opacity(0.04), radius: 4)
-                        .padding(.horizontal, MenuLoTheme.Spacing.lg)
-                    }
-
-                    // --- Max Distance ---
-                    VStack(alignment: .leading, spacing: MenuLoTheme.Spacing.md) {
-                        SectionHeader(title: "Max Distance", icon: "location.circle.fill")
-                            .padding(.horizontal, MenuLoTheme.Spacing.lg)
-
-                        VStack(spacing: MenuLoTheme.Spacing.sm) {
-                            HStack {
-                                Text("\(String(format: "%.0f", maxDistance)) km")
-                                    .font(.system(size: 32, weight: .bold, design: .rounded))
-                                    .foregroundColor(Color(hex: "#6C5CE7"))
-                                Text("maks. uzaklık")
-                                    .font(MenuLoTheme.Fonts.body)
-                                    .foregroundColor(MenuLoTheme.Colors.textSecondary)
-                                    .padding(.top, 8)
-                                Spacer()
-                            }
-
-                            Slider(value: $maxDistance, in: 0.5...20, step: 0.5)
-                                .tint(Color(hex: "#6C5CE7"))
-
-                            HStack {
-                                Text("0.5 km")
-                                Spacer()
-                                Text("20 km")
-                            }
-                            .font(.caption)
-                            .foregroundColor(MenuLoTheme.Colors.textSecondary)
-                        }
-                        .padding(MenuLoTheme.Spacing.lg)
-                        .background(MenuLoTheme.Colors.cardBackground)
-                        .cornerRadius(MenuLoTheme.CornerRadius.large)
-                        .shadow(color: .black.opacity(0.04), radius: 4)
-                        .padding(.horizontal, MenuLoTheme.Spacing.lg)
-                    }
-
-                    // --- Oluştur Butonu ---
-                    PrimaryButton(title: "Odayı Oluştur", isLoading: isCreating) {
-                        isCreating = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                            isCreating = false
-                            dismiss()
+                    // Oluştur Butonu
+                    PrimaryButton(title: "Odayı Oluştur", isLoading: viewModel.isLoading) {
+                        Task {
+                            await viewModel.createRoom(
+                                name: roomName,
+                                categories: Array(selectedCategories),
+                                budget: Int(budget),
+                                maxDistanceKm: maxDistance
+                            )
+                            if viewModel.currentRoom != nil { dismiss() }
                         }
                     }
-                    .disabled(!isFormValid)
+                    .disabled(!isFormValid || viewModel.isLoading)
                     .opacity(isFormValid ? 1 : 0.5)
                     .padding(.horizontal, MenuLoTheme.Spacing.lg)
                     .padding(.bottom, MenuLoTheme.Spacing.xl)
@@ -391,8 +379,11 @@ struct CreateRoomSheet: View {
 }
 
 // MARK: - Odaya Katılma Sheet
+
 struct JoinRoomSheet: View {
+    @ObservedObject var viewModel: RoomViewModel
     @Environment(\.dismiss) private var dismiss
+
     @State private var code = ""
 
     var body: some View {
@@ -413,13 +404,28 @@ struct JoinRoomSheet: View {
                 }
                 .padding(.top, MenuLoTheme.Spacing.xl)
 
-                CustomTextField(placeholder: "Oda Kodu (örn: ABC-1234)", iconName: "key.fill", text: $code)
-                    .padding(.horizontal, MenuLoTheme.Spacing.lg)
-
-                PrimaryButton(title: "Katıl") {
-                    dismiss()
+                if let err = viewModel.errorMessage {
+                    Text(err)
+                        .font(MenuLoTheme.Fonts.caption)
+                        .foregroundColor(.red)
+                        .padding(.horizontal, MenuLoTheme.Spacing.lg)
                 }
-                .disabled(code.isEmpty)
+
+                CustomTextField(
+                    placeholder: "Oda Kodu (örn: A3F9C2)",
+                    iconName: "key.fill",
+                    text: $code
+                )
+                .textInputAutocapitalization(.characters)
+                .padding(.horizontal, MenuLoTheme.Spacing.lg)
+
+                PrimaryButton(title: "Katıl", isLoading: viewModel.isLoading) {
+                    Task {
+                        await viewModel.joinRoom(pinCode: code.uppercased())
+                        if viewModel.currentRoom != nil { dismiss() }
+                    }
+                }
+                .disabled(code.isEmpty || viewModel.isLoading)
                 .opacity(code.isEmpty ? 0.5 : 1)
                 .padding(.horizontal, MenuLoTheme.Spacing.lg)
 
@@ -438,6 +444,48 @@ struct JoinRoomSheet: View {
 }
 
 // MARK: - Yardımcı Bileşenler
+
+private struct SliderCard: View {
+    let title: String
+    let icon: String
+    let valueLabel: String
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    let step: Double
+    let minLabel: String
+    let maxLabel: String
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: MenuLoTheme.Spacing.md) {
+            SectionHeader(title: title, icon: icon)
+                .padding(.horizontal, MenuLoTheme.Spacing.lg)
+
+            VStack(spacing: MenuLoTheme.Spacing.sm) {
+                HStack {
+                    Text(valueLabel)
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .foregroundColor(tint)
+                    Spacer()
+                }
+                Slider(value: $value, in: range, step: step).tint(tint)
+                HStack {
+                    Text(minLabel)
+                    Spacer()
+                    Text(maxLabel)
+                }
+                .font(.caption)
+                .foregroundColor(MenuLoTheme.Colors.textSecondary)
+            }
+            .padding(MenuLoTheme.Spacing.lg)
+            .background(MenuLoTheme.Colors.cardBackground)
+            .cornerRadius(MenuLoTheme.CornerRadius.large)
+            .shadow(color: .black.opacity(0.04), radius: 4)
+            .padding(.horizontal, MenuLoTheme.Spacing.lg)
+        }
+    }
+}
+
 private struct FoodCategoryButton: View {
     let name: String
     let emoji: String
@@ -447,8 +495,7 @@ private struct FoodCategoryButton: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: 4) {
-                Text(emoji)
-                    .font(.system(size: 28))
+                Text(emoji).font(.system(size: 28))
                 Text(name)
                     .font(.caption)
                     .fontWeight(isSelected ? .semibold : .regular)
@@ -456,11 +503,7 @@ private struct FoodCategoryButton: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, MenuLoTheme.Spacing.sm)
-            .background(
-                isSelected
-                    ? MenuLoTheme.Colors.primary
-                    : MenuLoTheme.Colors.cardBackground
-            )
+            .background(isSelected ? MenuLoTheme.Colors.primary : MenuLoTheme.Colors.cardBackground)
             .cornerRadius(MenuLoTheme.CornerRadius.large)
             .overlay(
                 RoundedRectangle(cornerRadius: MenuLoTheme.CornerRadius.large)
@@ -493,7 +536,91 @@ private struct SectionHeader: View {
     }
 }
 
+// MARK: - Mock Model (geçici; ileri fazda API listesi geçecek)
+
+private struct MockRoom: Identifiable {
+    let id = UUID()
+    let name: String
+    let host: String
+    let participants: Int
+    let categories: [String]
+    let budget: Int
+    let maxDistance: Int
+    let status: String
+    let emoji: String
+}
+
+private struct RoomCard: View {
+    let room: MockRoom
+
+    var statusColor: Color {
+        switch room.status {
+        case "active":   return MenuLoTheme.Colors.success
+        case "deciding": return MenuLoTheme.Colors.primary
+        default:         return MenuLoTheme.Colors.textSecondary
+        }
+    }
+    var statusLabel: String {
+        switch room.status {
+        case "active":   return "Aktif"
+        case "deciding": return "Karar Veriliyor"
+        case "done":     return "Tamamlandı"
+        default:         return ""
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: MenuLoTheme.Spacing.md) {
+            HStack {
+                Text(room.emoji).font(.system(size: 32))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(room.name)
+                        .font(MenuLoTheme.Fonts.body).fontWeight(.semibold)
+                        .foregroundColor(MenuLoTheme.Colors.textPrimary)
+                    Text("Oluşturan: \(room.host)")
+                        .font(MenuLoTheme.Fonts.caption)
+                        .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                }
+                Spacer()
+                Text(statusLabel)
+                    .font(.caption2).fontWeight(.semibold)
+                    .foregroundColor(statusColor)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(statusColor.opacity(0.12))
+                    .clipShape(Capsule())
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(room.categories, id: \.self) { cat in
+                        Text(cat)
+                            .font(.caption2).foregroundColor(.white)
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(MenuLoTheme.Colors.primary).clipShape(Capsule())
+                    }
+                }
+            }
+
+            HStack {
+                Label("\(room.participants) kişi", systemImage: "person.2.fill")
+                Spacer()
+                Label("₺\(room.budget)/kişi", systemImage: "turkishlirasign.circle")
+                Spacer()
+                Label("\(room.maxDistance) km", systemImage: "location.circle")
+            }
+            .font(MenuLoTheme.Fonts.caption)
+            .foregroundColor(MenuLoTheme.Colors.textSecondary)
+        }
+        .padding(MenuLoTheme.Spacing.lg)
+        .background(MenuLoTheme.Colors.cardBackground)
+        .cornerRadius(MenuLoTheme.CornerRadius.large)
+        .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
+    }
+}
+
 // MARK: - Preview
+
 #Preview {
     RoomListView()
+        .environmentObject(RoomViewModel())
 }

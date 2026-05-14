@@ -37,7 +37,7 @@ struct ProfileView: View {
                                 ProfileRow(icon: "heart.fill",        iconColor: .red,                             title: "Favorilerim",            subtitle: "Beğendiğin restoranlar ve ürünler")
                             }
                             Divider().padding(.horizontal, MenuLoTheme.Spacing.lg)
-                            NavigationLink(destination: ReviewsView()) {
+                            NavigationLink(destination: ReviewsView(restaurantId: 0)) {
                                 ProfileRow(icon: "star.fill",          iconColor: .yellow,                          title: "Yorumlarım",             subtitle: "Yazdığın değerlendirmeler")
                             }
                             Divider().padding(.horizontal, MenuLoTheme.Spacing.lg)
@@ -286,7 +286,7 @@ private struct BusinessPanelSection: View {
                     ProfileRow(icon: "building.2.fill",            iconColor: Color(hex: "#6C5CE7"),         title: "My Business",   subtitle: "İşletme bilgileri ve çalışma saatleri")
                 }
                 Divider().padding(.horizontal, MenuLoTheme.Spacing.lg)
-                NavigationLink(destination: ReviewsView()) {
+                NavigationLink(destination: ReviewsView(restaurantId: 0)) {
                     ProfileRow(icon: "star.bubble.fill",           iconColor: .yellow,                        title: "Değerlendirmeler", subtitle: "Müşteri yorumlarını gör ve yanıtla")
                 }
             }

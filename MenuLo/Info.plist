@@ -53,6 +53,17 @@
 		<string>Gabarito-Bold.ttf</string>
 		<string>Gabarito-ExtraBold.ttf</string>
 	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.menulo.deeplink</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>menulo</string>
+			</array>
+		</dict>
+	</array>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchScreen</key>

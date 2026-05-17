@@ -7,11 +7,84 @@ struct RestaurantResponse: Codable {
     let data: [Restaurant]
 }
 
+// MARK: - UserStats
+
+struct UserStats: Decodable {
+    let visitCount: Int
+    let favouriteCount: Int
+    let avgRating: Double
+    let business: BusinessStats?
+
+    enum CodingKeys: String, CodingKey {
+        case visitCount     = "visit_count"
+        case favouriteCount = "favourite_count"
+        case avgRating      = "avg_rating"
+        case business
+    }
+}
+
+struct BusinessStats: Decodable {
+    let restaurantId: Int
+    let avgRating: Double
+    let reviewCount: Int
+    let favCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case restaurantId = "restaurant_id"
+        case avgRating    = "avg_rating"
+        case reviewCount  = "review_count"
+        case favCount     = "fav_count"
+    }
+}
+
+struct UserStatsResponse: Decodable {
+    let success: Bool
+    let data: UserStats
+}
+
+// MARK: - RestaurantStats
+
+struct RestaurantStats: Decodable {
+    let restaurantId: Int
+    let avgRating: Double
+    let reviewCount: Int
+    let priceRange: String
+
+    enum CodingKeys: String, CodingKey {
+        case restaurantId = "restaurant_id"
+        case avgRating    = "avg_rating"
+        case reviewCount  = "review_count"
+        case priceRange   = "price_range"
+    }
+}
+
+struct RestaurantStatsResponse: Decodable {
+    let success: Bool
+    let data: RestaurantStats
+}
+
+// MARK: - Restaurant
+
 struct Restaurant: Codable, Identifiable, Hashable {
     let restaurantId: Int
     let ownerId: Int
     let businessName: String
     let address: String?
+    let latitude: Double
+    let longitude: Double
+
+    // API'den gelen istatistik alanları (nullable fallback ile)
+    let avgRating: Double?
+    let reviewCount: Int?
+    let priceRange: String?
+    let cuisineType: String?
+
+    /// PostGIS ile hesaplanmış mesafe (metre). `?lat=&lng=` query'si gönderilmediyse nil.
+    let distanceM: Double?
+
+    /// Backend'in working_hours JSONB üzerinden hesapladığı anlık açıklık durumu.
+    /// working_hours yoksa true döner.
+    let isOpenNow: Bool?
 
     var id: Int { restaurantId }
 
@@ -22,35 +95,39 @@ struct Restaurant: Codable, Identifiable, Hashable {
     func hash(into hasher: inout Hasher) {
         hasher.combine(restaurantId)
     }
-    
-    // Geriye dönük uyumluluk: MapView ve diğer eski view'ların bozulmaması için
+
     var name: String { businessName }
-    
-    // Backend'den PostGIS ile parçalanarak gelen gerçek koordinatlar
-    let latitude: Double
-    let longitude: Double
-    
-    // UI Uyumluluğu (MockData/AppRestaurant yapısı bozulmasın diye geçici değerler)
-    var cuisine: String { "Türk Mutfağı" }
-    var rating: Double { 4.5 }
-    var reviewCount: Int { 120 }
-    var distance: String { "Yakında" }
-    var priceRange: String { "₺₺" }
-    var tags: [String] { ["Lezzetli", "Popüler"] }
+    var cuisine: String { cuisineType ?? "Restoran" }
+    var rating: Double { avgRating ?? 0.0 }
+    var reviewCountDisplay: Int { reviewCount ?? 0 }
+    var priceRangeDisplay: String { priceRange ?? "₺₺" }
+    var tags: [String] { [cuisine] }
     var emoji: String { "🍽️" }
-    var isOpen: Bool { true }
-    var deliveryTime: String { "20-30 dk" }
-    
+    var isOpen: Bool { isOpenNow ?? true }
+
+    /// Mesafeyi kullanıcı dostu metin olarak biçimlendirir.
+    /// Backend distance_m göndermediyse "Yakında" döner.
+    var distance: String {
+        guard let m = distanceM else { return "Yakında" }
+        if m < 1000 { return "\(Int(m.rounded())) m" }
+        let km = m / 1000
+        return String(format: "%.1f km", km)
+    }
+
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
-    
+
     enum CodingKeys: String, CodingKey {
         case restaurantId = "restaurant_id"
-        case ownerId = "owner_id"
+        case ownerId      = "owner_id"
         case businessName = "business_name"
-        case address
-        case latitude
-        case longitude
+        case address, latitude, longitude
+        case avgRating    = "avg_rating"
+        case reviewCount  = "review_count"
+        case priceRange   = "price_range"
+        case cuisineType  = "cuisine_type"
+        case distanceM    = "distance_m"
+        case isOpenNow    = "is_open"
     }
 }

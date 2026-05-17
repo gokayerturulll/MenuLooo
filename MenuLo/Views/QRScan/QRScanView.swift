@@ -2,26 +2,23 @@ import SwiftUI
 import AVFoundation
 
 // MARK: - QRScanView
-// Tab 2 ana görünümü: "QR Okut" (kamera) ve "QR Göster" (oda kodu).
-// Paylaşılan RoomViewModel EnvironmentObject olarak MainTabView'dan gelir.
 
 struct QRScanView: View {
 
     @EnvironmentObject private var viewModel: RoomViewModel
     @State private var selectedTab          = 0
     @State private var navigateToRoom       = false
-    @State private var joinTriggeredByQR    = false  // sadece QR taramasından gelen join'leri yakala
-
-    // Tarama animasyonu
+    @State private var joinTriggeredByQR    = false
+    @State private var scanFailedByQR       = false   // tracks QR-triggered join failures
+    @State private var shouldResetScanner   = false   // rising-edge signal to QRScannerRepresentable
     @State private var scanProgress: CGFloat = 0
+    @State private var cameraPermission     = AVCaptureDevice.authorizationStatus(for: .video)
 
     var body: some View {
         ZStack {
             MenuLoTheme.Colors.backgroundLight.ignoresSafeArea()
 
             VStack(spacing: 0) {
-
-                // Segmented tab seçici
                 Picker("İşlem", selection: $selectedTab) {
                     Text("QR Okut").tag(0)
                     Text("QR Göster").tag(1)
@@ -40,27 +37,35 @@ struct QRScanView: View {
         }
         .navigationTitle("Grup Karar Odası")
         .navigationBarTitleDisplayMode(.inline)
-        // QR taraması sonrası odaya katılım başarılıysa ActiveRoomView'a yönlendir
         .navigationDestination(isPresented: $navigateToRoom) {
             if let room = viewModel.currentRoom {
-                ActiveRoomView(
-                    room: room,
-                    participantIds: viewModel.participantIds,
-                    onLeave: { viewModel.leaveCurrentRoom() }
-                )
+                RoomVotingView(room: room, onLeave: { viewModel.leaveCurrentRoom() })
             }
         }
-        // joinRoom tamamlandığında ve QR akışından geliyorsa navigate et
         .onChange(of: viewModel.currentRoom?.roomId) { roomId in
             if roomId != nil && joinTriggeredByQR {
                 joinTriggeredByQR = false
                 navigateToRoom    = true
             }
         }
-        // Hata alert'i
+        // When a QR-triggered join fails, schedule scanner reset
+        .onChange(of: viewModel.isLoading) { loading in
+            if !loading, viewModel.errorMessage != nil, joinTriggeredByQR {
+                joinTriggeredByQR = false
+                scanFailedByQR    = true
+            }
+        }
         .alert("Hata", isPresented: Binding(
             get: { viewModel.errorMessage != nil },
-            set: { if !$0 { viewModel.errorMessage = nil } }
+            set: { dismissed in
+                if !dismissed {
+                    viewModel.errorMessage = nil
+                    if scanFailedByQR {
+                        scanFailedByQR      = false
+                        shouldResetScanner  = true
+                    }
+                }
+            }
         )) {
             Button("Tamam", role: .cancel) { viewModel.errorMessage = nil }
         } message: {
@@ -70,17 +75,28 @@ struct QRScanView: View {
 
     // MARK: - QR Okut Sekmesi
 
+    @ViewBuilder
     private var scanTab: some View {
+        switch cameraPermission {
+        case .authorized:
+            authorizedCameraView
+        case .notDetermined:
+            permissionRequestView
+        default:
+            permissionDeniedView
+        }
+    }
+
+    private var authorizedCameraView: some View {
         VStack(spacing: 0) {
             ZStack {
-                // AVFoundation kamera önizlemesi — UIViewControllerRepresentable
-                QRScannerRepresentable { code in
-                    handleScannedCode(code)
-                }
+                QRScannerRepresentable(
+                    onCodeDetected: handleScannedCode,
+                    shouldReset: $shouldResetScanner
+                )
                 .cornerRadius(MenuLoTheme.CornerRadius.large)
                 .clipped()
 
-                // Tarama çerçevesi + animasyonu
                 ZStack {
                     RoundedRectangle(cornerRadius: MenuLoTheme.CornerRadius.large)
                         .stroke(Color.white.opacity(0.5), lineWidth: 2)
@@ -109,7 +125,6 @@ struct QRScanView: View {
                         }
                 }
 
-                // Yükleniyor örtüsü (join REST çağrısı sırasında)
                 if viewModel.isLoading {
                     Color.black.opacity(0.5)
                         .cornerRadius(MenuLoTheme.CornerRadius.large)
@@ -130,6 +145,78 @@ struct QRScanView: View {
         }
     }
 
+    private var permissionRequestView: some View {
+        VStack(spacing: MenuLoTheme.Spacing.xl) {
+            Spacer()
+            Image(systemName: "camera.circle")
+                .font(.system(size: 72))
+                .foregroundColor(MenuLoTheme.Colors.primary.opacity(0.6))
+
+            VStack(spacing: MenuLoTheme.Spacing.sm) {
+                Text("Kamera İzni Gerekiyor")
+                    .font(MenuLoTheme.Fonts.title)
+                    .foregroundColor(MenuLoTheme.Colors.textPrimary)
+                Text("QR kodu okuyabilmek için kamera erişimine ihtiyacımız var.")
+                    .font(MenuLoTheme.Fonts.body)
+                    .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, MenuLoTheme.Spacing.xl)
+            }
+
+            PrimaryButton(title: "Kamera İznini Ver") {
+                Task {
+                    let granted = await AVCaptureDevice.requestAccess(for: .video)
+                    cameraPermission = granted ? .authorized : .denied
+                }
+            }
+            .padding(.horizontal, MenuLoTheme.Spacing.lg)
+            Spacer()
+        }
+    }
+
+    private var permissionDeniedView: some View {
+        VStack(spacing: MenuLoTheme.Spacing.xl) {
+            Spacer()
+            Image(systemName: "camera.fill.badge.ellipsis")
+                .font(.system(size: 72))
+                .foregroundColor(.red.opacity(0.6))
+
+            VStack(spacing: MenuLoTheme.Spacing.sm) {
+                Text("Kamera İzni Reddedildi")
+                    .font(MenuLoTheme.Fonts.title)
+                    .foregroundColor(MenuLoTheme.Colors.textPrimary)
+                Text("QR tarayıcı için kamera iznini Ayarlar > Gizlilik > Kamera bölümünden açabilirsin.")
+                    .font(MenuLoTheme.Fonts.body)
+                    .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, MenuLoTheme.Spacing.xl)
+            }
+
+            Button {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "gear")
+                    Text("Ayarlara Git")
+                }
+                .font(MenuLoTheme.Fonts.button)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(MenuLoTheme.Spacing.md)
+                .background(MenuLoTheme.Colors.primary)
+                .cornerRadius(MenuLoTheme.CornerRadius.large)
+            }
+            .padding(.horizontal, MenuLoTheme.Spacing.lg)
+            Spacer()
+        }
+        // Refresh status when user returns from Settings
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            cameraPermission = AVCaptureDevice.authorizationStatus(for: .video)
+        }
+    }
+
     // MARK: - QR Göster Sekmesi
 
     private var showTab: some View {
@@ -137,7 +224,6 @@ struct QRScanView: View {
             Spacer()
 
             if let room = viewModel.currentRoom {
-                // Aktif oda var — QR ve PIN göster
                 Text(room.name)
                     .font(MenuLoTheme.Fonts.title)
                     .foregroundColor(MenuLoTheme.Colors.textPrimary)
@@ -150,7 +236,7 @@ struct QRScanView: View {
 
                     if let qr = viewModel.qrCodeImage {
                         Image(uiImage: qr)
-                            .interpolation(.none)  // piksel bozulmasını önler
+                            .interpolation(.none)
                             .resizable()
                             .scaledToFit()
                             .frame(width: 220, height: 220)
@@ -158,7 +244,6 @@ struct QRScanView: View {
                         ProgressView()
                     }
 
-                    // Marka logosu QR'ın ortasında
                     Circle()
                         .fill(Color.white)
                         .frame(width: 48, height: 48)
@@ -169,7 +254,6 @@ struct QRScanView: View {
                         .foregroundColor(MenuLoTheme.Colors.primary)
                 }
 
-                // PIN metni
                 VStack(spacing: 4) {
                     Text("PIN")
                         .font(.caption2).fontWeight(.semibold)
@@ -186,14 +270,12 @@ struct QRScanView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, MenuLoTheme.Spacing.xl)
 
-                // Odayı Aç butonu
                 PrimaryButton(title: "Odayı Aç") {
                     navigateToRoom = true
                 }
                 .padding(.horizontal, MenuLoTheme.Spacing.lg)
 
             } else {
-                // Aktif oda yok
                 Image(systemName: "qrcode")
                     .resizable()
                     .scaledToFit()
@@ -220,22 +302,32 @@ struct QRScanView: View {
     private func handleScannedCode(_ code: String) {
         guard !viewModel.isLoading else { return }
 
-        // Haptic feedback — başarılı okuma hissi
+        let upper = code.uppercased()
+
+        // PIN doğrulama: tam 6 karakter, yalnızca A-Z ve 0-9
+        guard upper.count == 6,
+              upper.allSatisfy({ ($0 >= "A" && $0 <= "Z") || ($0 >= "0" && $0 <= "9") }) else {
+            let generator = UINotificationFeedbackGenerator()
+            generator.prepare()
+            generator.notificationOccurred(.error)
+            shouldResetScanner = true
+            return
+        }
+
         let generator = UINotificationFeedbackGenerator()
         generator.prepare()
         generator.notificationOccurred(.success)
 
         joinTriggeredByQR = true
-        Task { await viewModel.joinRoom(pinCode: code.uppercased()) }
+        Task { await viewModel.joinRoom(pinCode: upper) }
     }
 }
 
-// MARK: - QR Scanner (UIViewControllerRepresentable)
-// AVFoundation kamerasını SwiftUI'a sarar.
-// Bellek güvenliği: delegate ayrı bir Coordinator sınıfında, VC'ye weak ref ile.
+// MARK: - QRScannerRepresentable
 
 struct QRScannerRepresentable: UIViewControllerRepresentable {
     let onCodeDetected: (String) -> Void
+    @Binding var shouldReset: Bool
 
     func makeUIViewController(context: Context) -> QRScannerController {
         let vc = QRScannerController()
@@ -245,6 +337,11 @@ struct QRScannerRepresentable: UIViewControllerRepresentable {
 
     func updateUIViewController(_ vc: QRScannerController, context: Context) {
         vc.onCodeDetected = onCodeDetected
+        if shouldReset {
+            vc.resetScanner()
+            // Lower the flag back on the next run-loop tick to avoid re-entry
+            DispatchQueue.main.async { shouldReset = false }
+        }
     }
 }
 
@@ -255,14 +352,10 @@ final class QRScannerController: UIViewController {
     var onCodeDetected: ((String) -> Void)?
 
     private let session      = AVCaptureSession()
-    // Kamera ayarları ve startRunning/stopRunning bu queue üzerinden çalışır.
-    // Ana thread'i bloke etmez; bellek sızıntısı riskini azaltır.
     private let sessionQueue = DispatchQueue(label: "com.menulo.camera.session", qos: .userInitiated)
     private var previewLayer: AVCaptureVideoPreviewLayer?
     private var coordinator:  QRMetadataCoordinator?
-    private var isConfigured = false
-
-    // MARK: - Lifecycle
+    private var isConfigured  = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -292,13 +385,12 @@ final class QRScannerController: UIViewController {
     }
 
     deinit {
-        // sessionQueue.sync ile deinit tamamlanmadan session durdurulur
         sessionQueue.sync { [session] in
             if session.isRunning { session.stopRunning() }
         }
     }
 
-    // MARK: - Kamera İzni ve Konfigürasyon
+    // MARK: - İzin & Konfigürasyon
 
     private func requestAndConfigure() {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
@@ -306,14 +398,10 @@ final class QRScannerController: UIViewController {
             configureSession()
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
-                if granted {
-                    self?.configureSession()
-                } else {
-                    DispatchQueue.main.async { self?.showPermissionMessage() }
-                }
+                if granted { self?.configureSession() }
             }
         default:
-            showPermissionMessage()
+            break
         }
     }
 
@@ -323,22 +411,13 @@ final class QRScannerController: UIViewController {
 
             self.session.beginConfiguration()
 
-            guard let device = AVCaptureDevice.default(for: .video) else {
+            guard let device = AVCaptureDevice.default(for: .video),
+                  let input  = try? AVCaptureDeviceInput(device: device),
+                  self.session.canAddInput(input) else {
                 self.session.commitConfiguration()
                 return
             }
-
-            do {
-                let input = try AVCaptureDeviceInput(device: device)
-                guard self.session.canAddInput(input) else {
-                    self.session.commitConfiguration()
-                    return
-                }
-                self.session.addInput(input)
-            } catch {
-                self.session.commitConfiguration()
-                return
-            }
+            self.session.addInput(input)
 
             let output = AVCaptureMetadataOutput()
             guard self.session.canAddOutput(output) else {
@@ -347,10 +426,6 @@ final class QRScannerController: UIViewController {
             }
             self.session.addOutput(output)
 
-            // Delegate ayrı Coordinator sınıfında: retain cycle riski yok.
-            // QRScannerController → (strong) coordinator
-            // coordinator → (weak) session (sadece stopRunning için)
-            // AVCaptureOutput → (strong) coordinator  (VC'ye geri referans yok)
             let coord = QRMetadataCoordinator(sessionQueue: self.sessionQueue)
             coord.onCodeDetected = { [weak self] code in
                 self?.onCodeDetected?(code)
@@ -362,7 +437,6 @@ final class QRScannerController: UIViewController {
             self.session.commitConfiguration()
             self.isConfigured = true
 
-            // Preview layer ana thread'de oluşturulmalı
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 let layer = AVCaptureVideoPreviewLayer(session: self.session)
@@ -376,27 +450,10 @@ final class QRScannerController: UIViewController {
         }
     }
 
-    /// Kamera izni verilmediğinde kullanıcıya mesaj göster.
-    private func showPermissionMessage() {
-        let label = UILabel()
-        label.text          = "Kamera izni gerekiyor.\nAyarlar > Gizlilik > Kamera'dan izin verin."
-        label.textColor     = .white
-        label.textAlignment = .center
-        label.numberOfLines = 0
-        label.font          = UIFont.systemFont(ofSize: 15, weight: .medium)
-        label.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(label)
-        NSLayoutConstraint.activate([
-            label.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            label.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            label.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 32),
-            label.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -32),
-        ])
-    }
-
-    // MARK: - Taramayı Yeniden Başlat
+    // MARK: - Taramayı Sıfırla (API hatası veya geçersiz PIN sonrası)
 
     func resetScanner() {
+        coordinator?.reset()
         sessionQueue.async { [weak self] in
             guard let self, self.isConfigured, !self.session.isRunning else { return }
             self.session.startRunning()
@@ -405,17 +462,19 @@ final class QRScannerController: UIViewController {
 }
 
 // MARK: - QRMetadataCoordinator
-// AVCaptureMetadataOutputObjectsDelegate'i QRScannerController'dan izole eder.
-// Bu sayede AVCaptureOutput → Coordinator → weak closure zinciriyle retain cycle oluşmaz.
 
 final class QRMetadataCoordinator: NSObject, AVCaptureMetadataOutputObjectsDelegate {
 
     var onCodeDetected: ((String) -> Void)?
     private let sessionQueue: DispatchQueue
-    private var hasDetected = false  // çoklu callback'i önler
+    private var hasDetected = false
 
     init(sessionQueue: DispatchQueue) {
         self.sessionQueue = sessionQueue
+    }
+
+    func reset() {
+        hasDetected = false
     }
 
     func metadataOutput(
@@ -423,18 +482,12 @@ final class QRMetadataCoordinator: NSObject, AVCaptureMetadataOutputObjectsDeleg
         didOutput metadataObjects: [AVMetadataObject],
         from connection: AVCaptureConnection
     ) {
-        // Kamera 60fps çalışabilir — sadece ilk geçerli okumayı işle
         guard !hasDetected,
               let obj  = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
               obj.type == .qr,
               let code = obj.stringValue else { return }
 
         hasDetected = true
-
-        // Session'ı arka planda durdur, UI callback'ini ana thread'de tetikle
-        sessionQueue.async { [weak output] in
-            output?.metadataObjectsDelegate = nil  // hızlı durdur
-        }
 
         onCodeDetected?(code)
     }
@@ -459,7 +512,7 @@ private struct QRCorners: View {
 }
 
 private struct CornerShape: Shape {
-    let position: Int  // 0=TL  1=TR  2=BL  3=BR
+    let position: Int
     let length: CGFloat
 
     func path(in rect: CGRect) -> Path {

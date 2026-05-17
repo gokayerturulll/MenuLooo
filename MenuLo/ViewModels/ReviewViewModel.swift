@@ -3,9 +3,8 @@
 //  MenuLo
 //
 //  Restoran yorum listesi ve form gönderimi için tek view model.
-//  RestaurantDetailView'daki "Yorumlar" bölümünü besler ve aynı zamanda
-//  AddReviewSheet'in form state'ini tutar — böylece sheet kapanıp açıldığında
-//  taslak korunur ve gönderim sonrası liste anında güncellenir.
+//  RestaurantDetailView'daki "Yorumlar" bölümünü besler; sheet kapanıp
+//  açıldığında taslak korunur ve gönderim sonrası liste anında güncellenir.
 //
 
 import Foundation
@@ -19,12 +18,17 @@ final class ReviewViewModel: ObservableObject {
     @Published private(set) var isLoading = false
     @Published var errorMessage: String?
 
-    // MARK: - Form (taslak) durumu — AddReviewSheet kullanır
+    // MARK: - Form (taslak) durumu
     @Published var draftContent: String = ""
     @Published var draftTaste: Int? = nil
     @Published var draftService: Int? = nil
     @Published var draftAttitude: Int? = nil
     @Published private(set) var isSubmitting = false
+
+    // MARK: - Reply (işletme yanıtı) state
+    @Published var replyDraft: String = ""
+    @Published private(set) var replyingToReviewId: Int? = nil
+    @Published private(set) var isSendingReply = false
 
     /// DiscoverViewModel'deki idempotent fetch pattern'iyle aynı: aynı restoran
     /// için tekrarlı çağrılarda ağa gitme.
@@ -92,5 +96,63 @@ final class ReviewViewModel: ObservableObject {
         draftTaste = nil
         draftService = nil
         draftAttitude = nil
+    }
+
+    // MARK: - Reply (işletme yanıtı)
+
+    /// Yanıtlama compose alanını açar/kapatır.
+    func startReplying(to reviewId: Int) {
+        if replyingToReviewId == reviewId {
+            cancelReply()
+        } else {
+            replyingToReviewId = reviewId
+            replyDraft = ""
+            errorMessage = nil
+        }
+    }
+
+    func cancelReply() {
+        replyingToReviewId = nil
+        replyDraft = ""
+    }
+
+    /// Reply gönder; başarılıysa ilgili AppReview'a yerleştir, compose alanını kapat.
+    @discardableResult
+    func submitReply(restaurantId: Int) async -> Bool {
+        guard let reviewId = replyingToReviewId else { return false }
+        let trimmed = replyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            errorMessage = "Yanıt metni boş olamaz."
+            return false
+        }
+        guard !isSendingReply else { return false }
+
+        isSendingReply = true
+        errorMessage = nil
+        defer { isSendingReply = false }
+
+        do {
+            let saved = try await NetworkManager.shared.submitReviewReply(
+                restaurantId: restaurantId,
+                reviewId:     reviewId,
+                content:      trimmed
+            )
+            // Locally inject reply into the matching review so UI updates anında
+            if let idx = reviews.firstIndex(where: { $0.reviewId == reviewId }) {
+                var copy = reviews[idx]
+                copy.reply = ReviewReply(
+                    replyId:    saved.replyId,
+                    content:    saved.content,
+                    createdAt:  saved.createdAt ?? "",
+                    authorName: nil
+                )
+                reviews[idx] = copy
+            }
+            cancelReply()
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
     }
 }

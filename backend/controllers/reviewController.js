@@ -41,10 +41,18 @@ exports.getRestaurantReviews = async (req, res) => {
     }
 
     try {
+        // LEFT JOIN review_reply — reply yoksa NULL alanlar döner.
+        // İşletme yanıtı varsa iOS bunu kart altında "İşletme Yanıtı" olarak gösterir.
         const { rows } = await pool.query(
-            `SELECT ${REVIEW_SELECT_COLUMNS}
+            `SELECT ${REVIEW_SELECT_COLUMNS},
+                    rr.reply_id          AS reply_id,
+                    rr.content           AS reply_content,
+                    rr.created_at        AS reply_created_at,
+                    ru.username          AS reply_author_name
              FROM review r
              JOIN "user" u ON u.user_id = r.user_id
+             LEFT JOIN review_reply rr ON rr.review_id = r.review_id
+             LEFT JOIN "user" ru ON ru.user_id = rr.user_id
              WHERE r.restaurant_id = $1
              ORDER BY r.created_at DESC`,
             [restaurantId]
@@ -123,5 +131,78 @@ exports.addReview = async (req, res) => {
     } catch (err) {
         console.error('Error creating review:', err.message);
         res.status(500).json({ success: false, message: 'Yorum kaydedilirken sunucu hatası oluştu.' });
+    }
+};
+
+// ─── POST /restaurants/:id/reviews/:reviewId/reply ────────────────────────
+// İşletme sahibi müşteri yorumuna yanıt verir. Sadece restoranın gerçek sahibi
+// (owner_id == req.user.user_id) yazabilir. Her review tek bir reply alır;
+// tekrar POST → 409 (UNIQUE constraint).
+
+exports.addReply = async (req, res) => {
+    const restaurantId = parseInt(req.params.id, 10);
+    const reviewId     = parseInt(req.params.reviewId, 10);
+
+    if (!Number.isInteger(restaurantId) || restaurantId <= 0 ||
+        !Number.isInteger(reviewId)     || reviewId <= 0) {
+        return res.status(400).json({ success: false, message: 'Geçersiz restoran veya yorum ID.' });
+    }
+
+    const userId = req.user?.user_id;
+    if (!userId) {
+        return res.status(401).json({ success: false, message: 'Oturum bilgisi alınamadı.' });
+    }
+
+    const { content } = req.body || {};
+    const trimmed = typeof content === 'string' ? content.trim() : '';
+
+    if (trimmed.length === 0 || trimmed.length > 1000) {
+        return res.status(400).json({
+            success: false,
+            message: 'Yanıt 1-1000 karakter arasında olmalıdır.'
+        });
+    }
+
+    try {
+        // 1. Restoran sahibi mi?
+        const ownerQ = await pool.query(
+            'SELECT owner_id FROM restaurant WHERE restaurant_id = $1',
+            [restaurantId]
+        );
+        if (ownerQ.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Restoran bulunamadı.' });
+        }
+        if (ownerQ.rows[0].owner_id !== userId) {
+            return res.status(403).json({ success: false, message: 'Yalnızca restoran sahibi yorumlara yanıt verebilir.' });
+        }
+
+        // 2. Yorum bu restorana mı ait?
+        const reviewQ = await pool.query(
+            'SELECT review_id FROM review WHERE review_id = $1 AND restaurant_id = $2',
+            [reviewId, restaurantId]
+        );
+        if (reviewQ.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Yorum bulunamadı veya bu restorana ait değil.' });
+        }
+
+        // 3. Reply ekle (UNIQUE constraint → çift yanıt 409)
+        try {
+            const { rows } = await pool.query(
+                `INSERT INTO review_reply (review_id, user_id, content)
+                 VALUES ($1, $2, $3)
+                 RETURNING reply_id, review_id, user_id, content, created_at`,
+                [reviewId, userId, trimmed]
+            );
+            return res.status(201).json({ success: true, data: rows[0] });
+        } catch (err) {
+            if (err.code === '23505') {
+                // UNIQUE violation — zaten yanıt verilmiş
+                return res.status(409).json({ success: false, message: 'Bu yoruma zaten yanıt verdiniz.' });
+            }
+            throw err;
+        }
+    } catch (err) {
+        console.error('[addReply]', err.message);
+        res.status(500).json({ success: false, message: 'Yanıt kaydedilirken sunucu hatası oluştu.' });
     }
 };

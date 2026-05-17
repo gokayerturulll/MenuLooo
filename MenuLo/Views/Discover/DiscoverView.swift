@@ -123,6 +123,11 @@ struct DiscoverView: View {
                             .padding(.top, MenuLoTheme.Spacing.sm)
                         }
 
+                        // "Öne Çıkanlar" horizontal scroll — API'den gelen ilk 5 yüksek puanlı restoran
+                        if searchText.isEmpty && selectedCategory == "Tümü" {
+                            FeaturedRestaurantsSection(restaurants: Array(viewModel.restaurants.prefix(5)))
+                        }
+
                         if filteredRestaurants.isEmpty {
                             VStack(spacing: MenuLoTheme.Spacing.md) {
                                 Text("🔍").font(.system(size: 52))
@@ -157,9 +162,93 @@ struct DiscoverView: View {
             .navigationTitle("Keşfet")
             .navigationBarTitleDisplayMode(.large)
             .sheet(isPresented: $showFilterSheet) {
-                FilterSheetView()
+                FilterSheetView(filter: viewModel.filter) { applied in
+                    Task { await viewModel.applyFilter(applied) }
+                }
             }
         }
+    }
+}
+
+// MARK: - Öne Çıkanlar
+private struct FeaturedRestaurantsSection: View {
+    let restaurants: [Restaurant]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: MenuLoTheme.Spacing.sm) {
+            HStack {
+                Text("Öne Çıkanlar")
+                    .font(MenuLoTheme.Fonts.subtitle)
+                    .fontWeight(.bold)
+                    .foregroundColor(MenuLoTheme.Colors.textPrimary)
+                Spacer()
+            }
+            .padding(.horizontal, MenuLoTheme.Spacing.lg)
+
+            if restaurants.isEmpty {
+                Text("Yakında")
+                    .font(MenuLoTheme.Fonts.caption)
+                    .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, MenuLoTheme.Spacing.md)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: MenuLoTheme.Spacing.md) {
+                        ForEach(restaurants) { restaurant in
+                            NavigationLink(destination: RestaurantDetailView(restaurant: restaurant)) {
+                                FeaturedCard(restaurant: restaurant)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                    }
+                    .padding(.horizontal, MenuLoTheme.Spacing.lg)
+                }
+            }
+        }
+        .padding(.bottom, MenuLoTheme.Spacing.sm)
+    }
+}
+
+private struct FeaturedCard: View {
+    let restaurant: Restaurant
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ZStack {
+                LinearGradient(
+                    colors: gradientColors,
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .frame(width: 140, height: 100)
+                .cornerRadius(MenuLoTheme.CornerRadius.large)
+
+                Text(restaurant.emoji)
+                    .font(.system(size: 36))
+            }
+
+            Text(restaurant.name)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(MenuLoTheme.Colors.textPrimary)
+                .lineLimit(1)
+                .frame(width: 140, alignment: .leading)
+
+            if restaurant.rating > 0 {
+                HStack(spacing: 3) {
+                    Image(systemName: "star.fill")
+                        .font(.system(size: 9))
+                        .foregroundColor(.yellow)
+                    Text(String(format: "%.1f", restaurant.rating))
+                        .font(.caption2)
+                        .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                }
+            }
+        }
+    }
+
+    private var gradientColors: [Color] {
+        restaurantGradient(cuisine: restaurant.cuisineType ?? restaurant.cuisine, seed: restaurant.restaurantId)
     }
 }
 
@@ -216,12 +305,12 @@ private struct RestaurantCard: View {
 
                     // Kalp İkonu (Sağ Üst)
                     Button {
-                        withAnimation(.spring(response: 0.3)) { 
-                            favouritesManager.toggleFavorite(restaurantID: restaurant.id)
+                        withAnimation(.spring(response: 0.3)) {
+                            favouritesManager.toggle(restaurant.id)
                         }
                     } label: {
-                        Image(systemName: favouritesManager.isFavorite(restaurantID: restaurant.id) ? "heart.fill" : "heart")
-                            .foregroundColor(favouritesManager.isFavorite(restaurantID: restaurant.id) ? .red : .white)
+                        Image(systemName: favouritesManager.isFavourite(restaurant.id) ? "heart.fill" : "heart")
+                            .foregroundColor(favouritesManager.isFavourite(restaurant.id) ? .red : .white)
                             .font(.system(size: 18, weight: .semibold))
                             .shadow(color: .black.opacity(0.3), radius: 4)
                     }
@@ -247,13 +336,19 @@ private struct RestaurantCard: View {
                         Image(systemName: "star.fill")
                             .font(.caption)
                             .foregroundColor(.yellow)
-                        Text(String(format: "%.1f", restaurant.rating))
-                            .font(MenuLoTheme.Fonts.caption)
-                            .fontWeight(.bold)
-                            .foregroundColor(MenuLoTheme.Colors.textPrimary)
-                        Text("(\(restaurant.reviewCount))")
-                            .font(.caption2)
-                            .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                        if restaurant.rating > 0 {
+                            Text(String(format: "%.1f", restaurant.rating))
+                                .font(MenuLoTheme.Fonts.caption)
+                                .fontWeight(.bold)
+                                .foregroundColor(MenuLoTheme.Colors.textPrimary)
+                            Text("(\(restaurant.reviewCountDisplay))")
+                                .font(.caption2)
+                                .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                        } else {
+                            Text("Yeni")
+                                .font(.caption2)
+                                .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                        }
                     }
                 }
 
@@ -275,8 +370,10 @@ private struct RestaurantCard: View {
                 // Meta bilgiler
                 HStack(spacing: 12) {
                     Label(restaurant.distance, systemImage: "location.fill")
-                    Label(restaurant.deliveryTime, systemImage: "clock")
-                    Label(restaurant.priceRange, systemImage: "turkishlirasign.circle")
+                    Label(restaurant.isOpen ? "Açık" : "Kapalı",
+                          systemImage: restaurant.isOpen ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        .foregroundColor(restaurant.isOpen ? MenuLoTheme.Colors.success : MenuLoTheme.Colors.error)
+                    Label(restaurant.priceRangeDisplay, systemImage: "turkishlirasign.circle")
                 }
                 .font(MenuLoTheme.Fonts.caption)
                 .foregroundColor(MenuLoTheme.Colors.textSecondary)
@@ -290,18 +387,7 @@ private struct RestaurantCard: View {
     }
 
     private var placeholderColors: [Color] {
-        let palettes: [[Color]] = [
-            [Color(hex: "#FF6B6B"), Color(hex: "#FFA63B")],
-            [Color(hex: "#6C5CE7"), Color(hex: "#A29BFE")],
-            [Color(hex: "#00B894"), Color(hex: "#55EFC4")],
-            [Color(hex: "#0984E3"), Color(hex: "#74B9FF")],
-            [Color(hex: "#E17055"), Color(hex: "#FAB1A0")],
-            [Color(hex: "#FDCB6E"), Color(hex: "#E0752A")],
-            [Color(hex: "#2D3436"), Color(hex: "#636E72")],
-            [Color(hex: "#6C5CE7"), Color(hex: "#FFA63B")],
-        ]
-        let idx = abs(restaurant.name.hashValue) % palettes.count
-        return palettes[idx]
+        restaurantGradient(cuisine: restaurant.cuisineType ?? restaurant.cuisine, seed: restaurant.restaurantId)
     }
 }
 
@@ -323,7 +409,7 @@ private struct DiscoverCategoryChip: View {
                     isSelected
                         ? AnyView(
                             LinearGradient(
-                                colors: [MenuLoTheme.Colors.primary, Color(hex: "#FF6B35")],
+                                colors: [MenuLoTheme.Colors.primary, MenuLoTheme.Colors.accentOrange],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
@@ -346,149 +432,29 @@ private struct DiscoverCategoryChip: View {
     }
 }
 
-// MARK: - Filter Sheet
-private struct FilterSheetView: View {
-    @Environment(\.dismiss) private var dismiss
-
-    @State private var dietTags: [String: Bool] = [
-        "🌱 Vegan": false, "🌾 Gluten Free": false,
-        "🥦 Vegetarian": false, "☪️ Helal": false
+// MARK: - Cuisine → gradient helper (shared across RestaurantCard + FeaturedCard)
+private func restaurantGradient(cuisine: String, seed: Int) -> [Color] {
+    let lower = cuisine.lowercased()
+    if lower.contains("pizza")  { return [.red.opacity(0.85), .orange] }
+    if lower.contains("burger") { return [MenuLoTheme.Colors.error, MenuLoTheme.Colors.warning] }
+    if lower.contains("sushi") || lower.contains("japon") { return [MenuLoTheme.Colors.accentBlue, MenuLoTheme.Colors.accentBlueLight] }
+    if lower.contains("vegan") || lower.contains("veget") { return [MenuLoTheme.Colors.success, MenuLoTheme.Colors.accentMint] }
+    if lower.contains("tatlı") || lower.contains("kafe") || lower.contains("kahve") { return [MenuLoTheme.Colors.warning, MenuLoTheme.Colors.accentDeepOrange] }
+    if lower.contains("deniz") || lower.contains("balık") { return [MenuLoTheme.Colors.accentBlue, MenuLoTheme.Colors.success] }
+    if lower.contains("ramen") || lower.contains("asya") { return [MenuLoTheme.Colors.accentPurple, MenuLoTheme.Colors.accentPurpleLight] }
+    let defaults: [[Color]] = [
+        [MenuLoTheme.Colors.primary, MenuLoTheme.Colors.accentOrange],
+        [MenuLoTheme.Colors.accentPurple, MenuLoTheme.Colors.accentPurpleLight],
+        [MenuLoTheme.Colors.success, MenuLoTheme.Colors.accentMint],
+        [MenuLoTheme.Colors.accentBlue, MenuLoTheme.Colors.accentBlueLight],
     ]
-    @State private var isOpenNow    = false
-    @State private var isPetFriendly = false
-    @State private var distance: Double = 5
-    @State private var sortOption   = "En İyi Eşleşme"
-
-    let sortOptions = ["En İyi Eşleşme", "En Yüksek Puan", "En Düşük Fiyat", "En Yüksek Fiyat", "En Yakın"]
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: MenuLoTheme.Spacing.lg) {
-
-                    // Diyet Etiketleri
-                    FilterSection(title: "Diyet Tercihleri", icon: "leaf.fill") {
-                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                            ForEach(Array(dietTags.keys.sorted()), id: \.self) { tag in
-                                Toggle(isOn: Binding(
-                                    get: { dietTags[tag] ?? false },
-                                    set: { dietTags[tag] = $0 }
-                                )) {
-                                    Text(tag)
-                                        .font(MenuLoTheme.Fonts.caption)
-                                }
-                                .toggleStyle(.button)
-                                .tint(MenuLoTheme.Colors.success)
-                            }
-                        }
-                    }
-
-                    // İşletme Özellikleri
-                    FilterSection(title: "İşletme Özellikleri", icon: "building.2.fill") {
-                        VStack(spacing: 10) {
-                            Toggle("Şu An Açık", isOn: $isOpenNow)
-                                .tint(MenuLoTheme.Colors.primary)
-                            Divider()
-                            Toggle("Evcil Hayvan Dostu 🐾", isOn: $isPetFriendly)
-                                .tint(MenuLoTheme.Colors.primary)
-                        }
-                    }
-
-                    // Mesafe
-                    FilterSection(title: "Maksimum Mesafe", icon: "location.circle.fill") {
-                        VStack(spacing: 8) {
-                            HStack {
-                                Text("\(String(format: "%.0f", distance)) km")
-                                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                                    .foregroundColor(MenuLoTheme.Colors.primary)
-                                Spacer()
-                            }
-                            Slider(value: $distance, in: 0.5...20, step: 0.5)
-                                .tint(MenuLoTheme.Colors.primary)
-                            HStack { Text("0.5 km"); Spacer(); Text("20 km") }
-                                .font(.caption)
-                                .foregroundColor(MenuLoTheme.Colors.textSecondary)
-                        }
-                    }
-
-                    // Sıralama
-                    FilterSection(title: "Sırala", icon: "arrow.up.arrow.down") {
-                        ForEach(sortOptions, id: \.self) { opt in
-                            Button {
-                                withAnimation { sortOption = opt }
-                            } label: {
-                                HStack {
-                                    Text(opt)
-                                        .font(MenuLoTheme.Fonts.body)
-                                        .foregroundColor(MenuLoTheme.Colors.textPrimary)
-                                    Spacer()
-                                    if sortOption == opt {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundColor(MenuLoTheme.Colors.primary)
-                                    }
-                                }
-                                .padding(.vertical, 4)
-                            }
-                        }
-                    }
-
-                    PrimaryButton(title: "Filtreleri Uygula") { dismiss() }
-                        .padding(.horizontal, MenuLoTheme.Spacing.lg)
-                        .padding(.bottom, MenuLoTheme.Spacing.xl)
-                }
-                .padding(.top, MenuLoTheme.Spacing.md)
-            }
-            .background(MenuLoTheme.Colors.backgroundLight)
-            .navigationTitle("Filtreler")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Sıfırla") {
-                        dietTags.keys.forEach { dietTags[$0] = false }
-                        isOpenNow = false; isPetFriendly = false
-                        distance = 5; sortOption = "En İyi Eşleşme"
-                    }.foregroundColor(MenuLoTheme.Colors.primary)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Kapat") { dismiss() }
-                        .foregroundColor(MenuLoTheme.Colors.primary)
-                }
-            }
-        }
-    }
+    return defaults[abs(seed) % defaults.count]
 }
-
-// MARK: - Filter Section Container
-private struct FilterSection<Content: View>: View {
-    let title: String
-    let icon: String
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: MenuLoTheme.Spacing.md) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .foregroundColor(MenuLoTheme.Colors.primary)
-                    .font(.footnote)
-                Text(title)
-                    .font(MenuLoTheme.Fonts.subtitle)
-                    .foregroundColor(MenuLoTheme.Colors.textPrimary)
-            }
-            content
-        }
-        .padding(MenuLoTheme.Spacing.lg)
-        .background(MenuLoTheme.Colors.cardBackground)
-        .cornerRadius(MenuLoTheme.CornerRadius.large)
-        .shadow(color: .black.opacity(0.04), radius: 6)
-        .padding(.horizontal, MenuLoTheme.Spacing.lg)
-    }
-}
-
 
 // MARK: - Preview
 #Preview {
     DiscoverView()
-        .environmentObject(DiscoverViewModel())
-        .environmentObject(FavouritesManager())
+        .environmentObject(DiscoverViewModel.preview())
+        .environmentObject(FavouritesManager.shared)
 }
 

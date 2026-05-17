@@ -3,25 +3,45 @@
 //  MenuLo
 //
 //  Kullanıcının favoriye aldığı restoranların global state yönetimi.
+//  UserDefaults ile cihaz üzerinde persiste edilir; uygulama kapansa bile
+//  favori listesi korunur.
 //
 
-import SwiftUI
+import Foundation
 
-class FavouritesManager: ObservableObject {
-    @Published var favoriteRestaurantIDs: Set<Int> = []
-    
-    // Toggle işlemi: Eğer favoriyse çıkarır, değilse ekler.
-    func toggleFavorite(restaurantID: Int) {
-        if favoriteRestaurantIDs.contains(restaurantID) {
-            favoriteRestaurantIDs.remove(restaurantID)
+final class FavouritesManager: ObservableObject {
+
+    private let udKey = "menulo_favourite_ids"
+
+    @Published private(set) var favouriteIds: Set<Int> {
+        didSet { persist() }
+    }
+
+    static let shared = FavouritesManager()
+
+    private init() {
+        let saved = UserDefaults.standard.array(forKey: "menulo_favourite_ids") as? [Int] ?? []
+        self.favouriteIds = Set(saved)
+    }
+
+    func toggle(_ restaurantId: Int) {
+        if favouriteIds.contains(restaurantId) {
+            favouriteIds.remove(restaurantId)
         } else {
-            favoriteRestaurantIDs.insert(restaurantID)
+            favouriteIds.insert(restaurantId)
         }
     }
-    
-    // Favori durumu kontrolü
-    func isFavorite(restaurantID: Int) -> Bool {
-        return favoriteRestaurantIDs.contains(restaurantID)
+
+    /// FavouritesView swipe-to-delete için. Var değilse no-op.
+    func remove(_ restaurantId: Int) {
+        favouriteIds.remove(restaurantId)
     }
-    
+
+    func isFavourite(_ restaurantId: Int) -> Bool {
+        favouriteIds.contains(restaurantId)
+    }
+
+    private func persist() {
+        UserDefaults.standard.set(Array(favouriteIds), forKey: udKey)
+    }
 }

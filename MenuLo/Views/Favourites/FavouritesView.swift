@@ -16,7 +16,7 @@ struct FavouritesView: View {
     let sortOptions = ["Rating", "Mesafe", "A–Z"]
 
     fileprivate var sortedRestaurants: [Restaurant] {
-        let favs = viewModel.restaurants.filter { favouritesManager.favoriteRestaurantIDs.contains($0.id) }
+        let favs = viewModel.restaurants.filter { favouritesManager.favouriteIds.contains($0.id) }
         switch sortOption {
         case "Rating":      return favs.sorted { $0.rating > $1.rating }
         case "Mesafe":      return favs.sorted { $0.distance < $1.distance }
@@ -56,7 +56,7 @@ struct FavouritesView: View {
                 } else {
                     // MARK: - Üst İstatistik Banner
                     HStack(spacing: 0) {
-                        FavStatItem(value: "\(favouritesManager.favoriteRestaurantIDs.count)", label: "Restoran", icon: "building.2.fill", color: MenuLoTheme.Colors.primary)
+                        FavStatItem(value: "\(favouritesManager.favouriteIds.count)", label: "Restoran", icon: "building.2.fill", color: MenuLoTheme.Colors.primary)
                     }
                     .padding(.vertical, MenuLoTheme.Spacing.md)
                     .background(MenuLoTheme.Colors.cardBackground)
@@ -98,17 +98,34 @@ struct FavouritesView: View {
                     Divider()
 
                     // MARK: - Liste
-                    ScrollView {
-                        LazyVStack(spacing: MenuLoTheme.Spacing.md) {
-                            ForEach(sortedRestaurants) { r in
-                                FavRestaurantCard(restaurant: r)
-                            }
+                    // List kullanıyoruz çünkü swipeActions sadece List satırlarında
+                    // çalışıyor. Sade görünüm için plainListStyle + scrollContentBackground hidden.
+                    List {
+                        ForEach(sortedRestaurants) { r in
+                            FavRestaurantCard(restaurant: r)
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets(top: 6,
+                                                          leading: MenuLoTheme.Spacing.lg,
+                                                          bottom: 6,
+                                                          trailing: MenuLoTheme.Spacing.lg))
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button(role: .destructive) {
+                                        withAnimation(.spring(response: 0.3)) {
+                                            favouritesManager.remove(r.id)
+                                        }
+                                    } label: {
+                                        Label("Sil", systemImage: "heart.slash.fill")
+                                    }
+                                }
                         }
-                        .padding(.horizontal, MenuLoTheme.Spacing.lg)
-                        .padding(.vertical, MenuLoTheme.Spacing.md)
-                        .padding(.bottom, 90)
                     }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
                     .background(MenuLoTheme.Colors.backgroundLight)
+                    .refreshable {
+                        await viewModel.refresh()
+                    }
                 }
             }
             .background(MenuLoTheme.Colors.backgroundLight)
@@ -187,7 +204,7 @@ private struct FavRestaurantCard: View {
                             .font(.caption)
                             .fontWeight(.semibold)
                             .foregroundColor(MenuLoTheme.Colors.textPrimary)
-                        Text("(\(restaurant.reviewCount))")
+                        Text("(\(restaurant.reviewCountDisplay))")
                             .font(.caption2)
                             .foregroundColor(MenuLoTheme.Colors.textSecondary)
                     }
@@ -203,7 +220,7 @@ private struct FavRestaurantCard: View {
                     }
                     Text("·")
                         .foregroundColor(MenuLoTheme.Colors.divider)
-                    Text(restaurant.priceRange)
+                    Text(restaurant.priceRangeDisplay)
                         .font(.caption2)
                         .foregroundColor(MenuLoTheme.Colors.textSecondary)
                 }
@@ -225,14 +242,14 @@ private struct FavRestaurantCard: View {
             Spacer()
 
             Button {
-                withAnimation(.spring(response: 0.3)) { 
-                    favouritesManager.toggleFavorite(restaurantID: restaurant.id) 
+                withAnimation(.spring(response: 0.3)) {
+                    favouritesManager.toggle(restaurant.id)
                 }
             } label: {
-                Image(systemName: favouritesManager.isFavorite(restaurantID: restaurant.id) ? "heart.fill" : "heart")
-                    .foregroundColor(favouritesManager.isFavorite(restaurantID: restaurant.id) ? .red : MenuLoTheme.Colors.textSecondary)
+                Image(systemName: favouritesManager.isFavourite(restaurant.id) ? "heart.fill" : "heart")
+                    .foregroundColor(favouritesManager.isFavourite(restaurant.id) ? .red : MenuLoTheme.Colors.textSecondary)
                     .font(.title3)
-                    .scaleEffect(favouritesManager.isFavorite(restaurantID: restaurant.id) ? 1.15 : 1.0)
+                    .scaleEffect(favouritesManager.isFavourite(restaurant.id) ? 1.15 : 1.0)
             }
         }
         .padding(MenuLoTheme.Spacing.md)
@@ -243,12 +260,12 @@ private struct FavRestaurantCard: View {
 
     private var placeholderColors: [Color] {
         let palettes: [[Color]] = [
-            [Color(hex: "#FF6B6B"), Color(hex: "#FFA63B")],
-            [Color(hex: "#6C5CE7"), Color(hex: "#A29BFE")],
-            [Color(hex: "#00B894"), Color(hex: "#55EFC4")],
-            [Color(hex: "#0984E3"), Color(hex: "#74B9FF")],
-            [Color(hex: "#E17055"), Color(hex: "#FAB1A0")],
-            [Color(hex: "#FDCB6E"), Color(hex: "#E0752A")]
+            [MenuLoTheme.Colors.accentRed, MenuLoTheme.Colors.primary],
+            [MenuLoTheme.Colors.accentPurple, MenuLoTheme.Colors.accentPurpleLight],
+            [MenuLoTheme.Colors.success, MenuLoTheme.Colors.accentMint],
+            [MenuLoTheme.Colors.accentBlue, MenuLoTheme.Colors.accentBlueLight],
+            [MenuLoTheme.Colors.error, MenuLoTheme.Colors.accentPeach],
+            [MenuLoTheme.Colors.warning, MenuLoTheme.Colors.accentDeepOrange]
         ]
         let idx = abs(restaurant.name.hashValue) % palettes.count
         return palettes[idx]
@@ -258,6 +275,6 @@ private struct FavRestaurantCard: View {
 // MARK: - Preview
 #Preview {
     FavouritesView()
-        .environmentObject(FavouritesManager())
+        .environmentObject(FavouritesManager.shared)
         .environmentObject(DiscoverViewModel())
 }

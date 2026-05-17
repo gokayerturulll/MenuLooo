@@ -20,16 +20,21 @@ struct ContentView: View {
         // .login          → LoginView
         // .customerHome   → MainTabView (Keşfet açılır)
         // .businessHome   → MenuManagerView paneli
-        switch authVM.rootDestination {
-        case .login:
-            LoginView()
-                .environmentObject(authVM)
-        case .customerHome:
-            MainTabView()
-                .environmentObject(authVM)
-        case .businessHome:
-            BusinessMainTabView()
-                .environmentObject(authVM)
+        Group {
+            switch authVM.rootDestination {
+            case .login:
+                LoginView()
+                    .environmentObject(authVM)
+            case .customerHome:
+                MainTabView()
+                    .environmentObject(authVM)
+            case .businessHome:
+                BusinessMainTabView()
+                    .environmentObject(authVM)
+            }
+        }
+        .onAppear {
+            authVM.startObservingSessionExpiry()
         }
     }
 }

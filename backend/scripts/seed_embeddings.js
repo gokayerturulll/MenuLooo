@@ -15,7 +15,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 // ----------------------------------------------------------------------------
 // Konfigürasyon
 // ----------------------------------------------------------------------------
-const EMBEDDING_DIM = 3072;            // gemini-embedding-001 default boyutu
+const EMBEDDING_DIM = 768;             // gemini-embedding-001 outputDimensionality
 const REQUEST_DELAY_MS = 700;         // Rate-limit'e takılmamak için ufak bekleme
 const BATCH_LOG_EVERY = 10;           // Her N üründe bir özet log
 
@@ -108,7 +108,11 @@ function buildContext(row) {
 // 4) Gemini ile embedding
 // ----------------------------------------------------------------------------
 async function embed(text) {
-    const result = await embeddingModel.embedContent(text);
+    const result = await embeddingModel.embedContent({
+        content: { parts: [{ text }] },
+        taskType: 'RETRIEVAL_DOCUMENT',
+        outputDimensionality: EMBEDDING_DIM,
+    });
     const values = result?.embedding?.values;
     if (!Array.isArray(values) || values.length !== EMBEDDING_DIM) {
         throw new Error(

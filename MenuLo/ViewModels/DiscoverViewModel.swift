@@ -9,6 +9,7 @@ class DiscoverViewModel: ObservableObject {
     @Published var locationManager = LocationManager()
     @Published var isLoading = false
     @Published var fetchError: String? = nil
+    @Published var filter: RestaurantFilter = RestaurantFilter()
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -28,7 +29,8 @@ class DiscoverViewModel: ObservableObject {
             .debounce(for: .seconds(1.5), scheduler: RunLoop.main)
             .sink { [weak self] _ in
                 Task { [weak self] in
-                    await self?.fetchNearbyRestaurants()
+                    // Konum güncellendiğinde distance_m'i tazelemek için zorla yenile.
+                    await self?.fetchNearbyRestaurants(forceRefresh: true)
                 }
             }
             .store(in: &cancellables)
@@ -47,11 +49,20 @@ class DiscoverViewModel: ObservableObject {
         defer { isLoading = false }
 
         do {
-            let fetched = try await NetworkManager.shared.fetchRestaurants()
+            let fetched = try await NetworkManager.shared.fetchRestaurants(
+                filter: filter,
+                userLocation: locationManager.userLocation
+            )
             self.restaurants = fetched
         } catch {
             self.fetchError = error.localizedDescription
         }
+    }
+
+    /// Filtre çekmecesinden dönen yeni durumu uygular ve listeyi yeniden yükler.
+    func applyFilter(_ newFilter: RestaurantFilter) async {
+        filter = newFilter
+        await fetchNearbyRestaurants(forceRefresh: true)
     }
 
     func refresh() async {

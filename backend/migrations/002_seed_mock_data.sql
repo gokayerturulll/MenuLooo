@@ -251,7 +251,7 @@ INSERT INTO category (menu_id, name) VALUES
 
 -- 6. Insert Menu Items (3 per category — total 450)
 -- Pattern: ürünün description'ı RAG için zengin tutuldu; dietary_tags gerçekçi.
-INSERT INTO menu_item (category_id, name, price, description, dietary_tags, embedding) VALUES
+INSERT INTO menu_item (category_id, name, price, description, dietary_tags) VALUES
 -- ── Cat 1-3 (Moda Burger) ──
 (1, 'Klasik Burger',         180.00, 'Izgara dana köfte, taze marul, dilim domates, kornişon turşu ve özel sosumuzla glutenli ekmek arasında.', '{"Helal"}', array_fill(0, ARRAY[3072])::vector),
 (1, 'Cheeseburger',          210.00, 'Çift dana köfte ve eritilmiş cheddar peyniri, taze marul, soğan halkaları ve karamelize sos.', '{"Helal"}', array_fill(0, ARRAY[3072])::vector),

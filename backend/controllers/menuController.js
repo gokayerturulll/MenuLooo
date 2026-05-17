@@ -1,4 +1,7 @@
 const pool = require('../config/db');
+const path = require('path');
+const fs   = require('fs/promises');
+const crypto = require('crypto');
 
 // ============================================================================
 // İşletme Menü CRUD
@@ -281,6 +284,87 @@ exports.deleteMenuItem = async (req, res) => {
     } catch (error) {
         console.error('deleteMenuItem Error:', error);
         res.status(500).json({ success: false, message: 'Ürün silinirken sunucu hatası oluştu.' });
+    }
+};
+
+// ============================================================================
+// Menü Öğesi Fotoğraf Yükleme
+// ----------------------------------------------------------------------------
+// POST /api/menu/items/:itemId/photo
+// Multipart form-data — field name: "photo"
+//
+// PLACEHOLDER: Görsel local dosya sistemine (backend/uploads/menu/) kaydediliyor.
+// Production'da S3 / Cloudinary / Cloudflare R2 entegrasyonu yapılmalı.
+// server.js'de /uploads path'i static olarak servis ediliyor — DB'de tutulan
+// image_url "/uploads/menu/abc.jpg" formatında, iOS bunu apiBaseURL hostunun
+// köküne ekleyerek tam URL kurar.
+// ============================================================================
+
+const UPLOAD_DIR = path.join(__dirname, '..', 'uploads', 'menu');
+const ALLOWED_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic']);
+const MAX_FILE_BYTES = 5 * 1024 * 1024;   // 5 MB
+
+/** POST /api/menu/items/:itemId/photo  (multer middleware bir önceki katmanda) */
+exports.uploadMenuItemPhoto = async (req, res) => {
+    try {
+        const itemId = parseInt(req.params.itemId, 10);
+        if (Number.isNaN(itemId)) {
+            return res.status(400).json({ success: false, message: 'Geçersiz ürün kimliği.' });
+        }
+
+        // multer hatası — file alanı eksik veya validation başarısız
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: 'Fotoğraf dosyası eksik.' });
+        }
+
+        // MIME ve boyut kontrolü (multer'ın limits/fileFilter yedeği)
+        if (!ALLOWED_MIMES.has(req.file.mimetype)) {
+            return res.status(400).json({ success: false, message: 'Sadece JPEG, PNG, WebP veya HEIC kabul edilir.' });
+        }
+        if (req.file.size > MAX_FILE_BYTES) {
+            return res.status(400).json({ success: false, message: 'Dosya 5 MB sınırını aşıyor.' });
+        }
+
+        // Sahiplik kontrolü (mevcut locateItem fonksiyonu)
+        const located = await locateItem(itemId);
+        if (!located) {
+            return res.status(404).json({ success: false, message: 'Ürün bulunamadı.' });
+        }
+        if (located.owner_id !== req.user.user_id) {
+            return res.status(403).json({ success: false, message: 'Bu ürünün fotoğrafını değiştiremezsiniz.' });
+        }
+
+        // Klasörü garantile (idempotent)
+        await fs.mkdir(UPLOAD_DIR, { recursive: true });
+
+        // Dosya adını rastgele üret — orijinal adı kullanmak path traversal riski
+        const ext = (path.extname(req.file.originalname || '') || '.jpg').toLowerCase().slice(0, 6);
+        const safeExt = /^\.[a-z0-9]+$/.test(ext) ? ext : '.jpg';
+        const filename = `${itemId}_${crypto.randomBytes(8).toString('hex')}${safeExt}`;
+        const filePath = path.join(UPLOAD_DIR, filename);
+
+        await fs.writeFile(filePath, req.file.buffer);
+
+        // Public URL (iOS tarafında apiBaseURL kökü ile birleşir)
+        const imageUrl = `/uploads/menu/${filename}`;
+
+        const updated = await pool.query(
+            `UPDATE menu_item SET image_url = $1
+             WHERE item_id = $2
+             RETURNING item_id, image_url`,
+            [imageUrl, itemId]
+        );
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                item_id: updated.rows[0].item_id,
+                image_url: updated.rows[0].image_url
+            }
+        });
+    } catch (error) {
+        console.error('[uploadMenuItemPhoto]', error.message);
+        res.status(500).json({ success: false, message: 'Fotoğraf yüklenirken sunucu hatası oluştu.' });
     }
 };
 

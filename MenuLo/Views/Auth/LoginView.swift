@@ -16,6 +16,7 @@ struct LoginView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var selectedTab: Int = 0   // 0 = Müşteri, 1 = İşletme
+    @State private var showForgotSheet = false
 
     private var selectedUserType: UserType {
         selectedTab == 1 ? .business : .customer
@@ -85,6 +86,16 @@ struct LoginView: View {
                             .autocapitalization(.none)
 
                         CustomTextField(placeholder: "Şifre", iconName: "lock.fill", text: $password, isSecure: true)
+
+                        // Şifremi Unuttum — minimal alt-sağ link
+                        HStack {
+                            Spacer()
+                            Button("Şifremi Unuttum") {
+                                showForgotSheet = true
+                            }
+                            .font(MenuLoTheme.Fonts.caption)
+                            .foregroundColor(MenuLoTheme.Colors.primary)
+                        }
                     }
                     .padding(.horizontal, MenuLoTheme.Spacing.lg)
 
@@ -127,6 +138,9 @@ struct LoginView: View {
             .ignoresSafeArea(.keyboard, edges: .bottom)
             .onDisappear {
                 authVM.clearError()
+            }
+            .sheet(isPresented: $showForgotSheet) {
+                ForgotPasswordSheet()
             }
         }
     }

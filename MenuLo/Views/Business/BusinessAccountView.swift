@@ -142,7 +142,7 @@ private struct AccountHero: View {
                     Circle()
                         .strokeBorder(
                             LinearGradient(
-                                colors: [MenuLoTheme.Colors.primary, Color(hex: "#FF6B35")],
+                                colors: [MenuLoTheme.Colors.primary, MenuLoTheme.Colors.accentOrange],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ),
@@ -153,7 +153,7 @@ private struct AccountHero: View {
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [MenuLoTheme.Colors.primary.opacity(0.85), Color(hex: "#FF6B35").opacity(0.85)],
+                                colors: [MenuLoTheme.Colors.primary.opacity(0.85), MenuLoTheme.Colors.accentOrange.opacity(0.85)],
                                 startPoint: .topLeading, endPoint: .bottomTrailing
                             )
                         )
@@ -166,7 +166,7 @@ private struct AccountHero: View {
                         .shadow(color: MenuLoTheme.Colors.primary.opacity(0.3), radius: 12)
 
                     Circle()
-                        .fill(Color(hex: "#6C5CE7"))
+                        .fill(MenuLoTheme.Colors.accentPurple)
                         .frame(width: 28, height: 28)
                         .overlay(
                             Image(systemName: "building.2.fill")
@@ -197,7 +197,7 @@ private struct AccountHero: View {
                     .padding(.vertical, 4)
                     .background(
                         LinearGradient(
-                            colors: [Color(hex: "#6C5CE7"), Color(hex: "#A29BFE")],
+                            colors: [MenuLoTheme.Colors.accentPurple, MenuLoTheme.Colors.accentPurpleLight],
                             startPoint: .leading, endPoint: .trailing
                         )
                     )

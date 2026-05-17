@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct RestaurantDetailView: View {
     let restaurant: Restaurant
@@ -75,7 +76,7 @@ struct RestaurantDetailView: View {
                             Circle()
                                 .fill(
                                     LinearGradient(
-                                        colors: [MenuLoTheme.Colors.primary, Color(hex: "#FF6B35")],
+                                        colors: [MenuLoTheme.Colors.primary, MenuLoTheme.Colors.accentOrange],
                                         startPoint: .topLeading, endPoint: .bottomTrailing
                                     )
                                 )
@@ -146,8 +147,22 @@ struct RestaurantDetailView: View {
                 DetailBadge(iconName: "star.fill",
                             text: String(format: "%.1f", restaurant.rating),
                             iconColor: .yellow)
+                // working_hours geldiyse gerçek açık/kapalı durumu; yoksa rozeti gizle
+                if let wh = detail?.workingHours {
+                    let openNow = wh.isOpenNow()
+                    DetailBadge(
+                        iconName: openNow ? "checkmark.circle.fill" : "xmark.circle.fill",
+                        text: openNow ? "Açık" : "Kapalı",
+                        iconColor: openNow ? MenuLoTheme.Colors.success : MenuLoTheme.Colors.error
+                    )
+                }
             }
             .padding(.horizontal)
+
+            // MARK: - Aksiyon Butonları: Ara / Yol Tarifi / Paylaş
+            actionButtonsRow
+                .padding(.horizontal)
+                .padding(.top, MenuLoTheme.Spacing.xs)
 
             // Apple HIG'de standart "disclosure row" pattern'i: tıklanabilir satır,
             // sağda chevron, ReviewsView'a push eder. Restoranın menü öğelerini
@@ -289,6 +304,120 @@ struct RestaurantDetailView: View {
             // Sessiz fail — description görünmez, başlık+menü çalışmaya devam eder.
         }
     }
+
+    // MARK: - Aksiyon Butonları (Ara / Yol Tarifi / Paylaş)
+
+    private var actionButtonsRow: some View {
+        HStack(spacing: MenuLoTheme.Spacing.sm) {
+            // Telefonla Ara — numara yoksa disabled
+            ActionButton(
+                iconName: "phone.fill",
+                label: "Ara",
+                isEnabled: phoneNumber != nil
+            ) {
+                callRestaurant()
+            }
+
+            // Yol Tarifi Al — koordinat zaten Restaurant model'inde var
+            ActionButton(
+                iconName: "arrow.triangle.turn.up.right.circle.fill",
+                label: "Yol Tarifi"
+            ) {
+                openDirections()
+            }
+
+            // Paylaş — ShareLink (iOS 16+)
+            ShareLink(item: shareURL, message: Text(shareMessage)) {
+                VStack(spacing: 4) {
+                    Image(systemName: "square.and.arrow.up.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                    Text("Paylaş")
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                }
+                .foregroundColor(MenuLoTheme.Colors.primary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, MenuLoTheme.Spacing.sm)
+                .background(MenuLoTheme.Colors.primary.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: MenuLoTheme.CornerRadius.medium))
+            }
+        }
+    }
+
+    // MARK: - Aksiyon Yardımcıları
+
+    /// RestaurantDetail.phone — getRestaurantById endpoint'inden gelir.
+    private var phoneNumber: String? {
+        guard let phone = detail?.phone?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !phone.isEmpty else { return nil }
+        return phone
+    }
+
+    private func callRestaurant() {
+        guard let phone = phoneNumber else { return }
+        // Sadece rakam ve + bırak; tel:// URL şeması başka karakter kabul etmiyor
+        let cleaned = phone.filter { $0.isNumber || $0 == "+" }
+        if let url = URL(string: "tel://\(cleaned)"),
+           UIApplication.shared.canOpenURL(url) {
+            UIApplication.shared.open(url)
+        }
+    }
+
+    /// Apple Maps açar (cihazda her zaman vardır). Google Maps yüklüyse fallback.
+    private func openDirections() {
+        let coord = restaurant.coordinate
+        let appleMapsURL = URL(string: "maps://?daddr=\(coord.latitude),\(coord.longitude)")
+        let googleMapsURL = URL(string: "comgooglemaps://?daddr=\(coord.latitude),\(coord.longitude)&directionsmode=driving")
+
+        if let g = googleMapsURL, UIApplication.shared.canOpenURL(g) {
+            UIApplication.shared.open(g)
+        } else if let a = appleMapsURL {
+            UIApplication.shared.open(a)
+        }
+    }
+
+    private var shareURL: URL {
+        // Deep link şeması — ileride gerçek web URL'iyle değiştirilebilir
+        URL(string: "menulo://restaurant/\(restaurant.id)")
+            ?? URL(string: "https://menulo.app/restaurant/\(restaurant.id)")!
+    }
+
+    private var shareMessage: String {
+        var lines = [restaurant.businessName]
+        if let addr = restaurant.address { lines.append(addr) }
+        lines.append("MenuLo'da gör")
+        return lines.joined(separator: " · ")
+    }
+}
+
+// MARK: - Aksiyon Butonu
+
+private struct ActionButton: View {
+    let iconName: String
+    let label: String
+    var isEnabled: Bool = true
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: iconName)
+                    .font(.system(size: 16, weight: .semibold))
+                Text(label)
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+            }
+            .foregroundColor(isEnabled ? MenuLoTheme.Colors.primary : MenuLoTheme.Colors.textSecondary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, MenuLoTheme.Spacing.sm)
+            .background(
+                (isEnabled ? MenuLoTheme.Colors.primary : MenuLoTheme.Colors.textSecondary)
+                    .opacity(0.1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: MenuLoTheme.CornerRadius.medium))
+        }
+        .disabled(!isEnabled)
+    }
 }
 
 // MARK: - Sticky Category Bar
@@ -343,7 +472,7 @@ private struct CategoryPill: View {
                     isSelected
                         ? AnyView(
                             LinearGradient(
-                                colors: [MenuLoTheme.Colors.primary, Color(hex: "#FF6B35")],
+                                colors: [MenuLoTheme.Colors.primary, MenuLoTheme.Colors.accentOrange],
                                 startPoint: .leading, endPoint: .trailing
                             )
                           )

@@ -11,6 +11,7 @@ import SwiftUI
 struct ProfileView: View {
 
     @EnvironmentObject var authViewModel: AuthViewModel
+    @StateObject private var statsViewModel = UserStatsViewModel()
     @State private var showBusinessSwitch = false
 
     var body: some View {
@@ -19,7 +20,7 @@ struct ProfileView: View {
                 VStack(spacing: 0) {
 
                     // MARK: - Hero Section
-                    ProfileHeroSection(authViewModel: authViewModel)
+                    ProfileHeroSection(authViewModel: authViewModel, statsViewModel: statsViewModel)
 
                     // MARK: - İşletme Paneli (sadece business user için)
                     if authViewModel.currentUser?.userType == .business {
@@ -41,7 +42,7 @@ struct ProfileView: View {
                                 ProfileRow(icon: "star.fill",          iconColor: .yellow,                          title: "Yorumlarım",             subtitle: "Yazdığın değerlendirmeler")
                             }
                             Divider().padding(.horizontal, MenuLoTheme.Spacing.lg)
-                            ProfileRow(icon: "trophy.fill",        iconColor: Color(hex: "#FDCB6E"),            title: "Rozetlerim",             subtitle: "Kazandığın ödül rozetleri")
+                            ProfileRow(icon: "trophy.fill",        iconColor: MenuLoTheme.Colors.warning,            title: "Rozetlerim",             subtitle: "Kazandığın ödül rozetleri")
                         }
 
                         // Hesap Ayarları
@@ -52,7 +53,11 @@ struct ProfileView: View {
                             Divider().padding(.horizontal, MenuLoTheme.Spacing.lg)
                             ProfileRow(icon: "bell.badge.fill",     iconColor: MenuLoTheme.Colors.warning,       title: "Bildirimler",            subtitle: "Yeşil Menü ve fırsat uyarıları")
                             Divider().padding(.horizontal, MenuLoTheme.Spacing.lg)
-                            ProfileRow(icon: "globe",               iconColor: Color(hex: "#6C5CE7"),            title: "Dil ve Bölge",           subtitle: "Türkçe · Türkiye")
+                            ProfileRow(icon: "globe",               iconColor: MenuLoTheme.Colors.accentPurple,            title: "Dil ve Bölge",           subtitle: "Türkçe · Türkiye")
+                            Divider().padding(.horizontal, MenuLoTheme.Spacing.lg)
+                            NavigationLink(destination: ChangePasswordView()) {
+                                ProfileRow(icon: "key.fill",        iconColor: MenuLoTheme.Colors.primary,       title: "Şifreyi Değiştir",      subtitle: "Mevcut şifreni güncelle")
+                            }
                             Divider().padding(.horizontal, MenuLoTheme.Spacing.lg)
                             ProfileRow(icon: "lock.shield.fill",    iconColor: MenuLoTheme.Colors.error,         title: "Gizlilik ve Güvenlik",   subtitle: "Veri ve hesap koruması")
                         }
@@ -66,7 +71,7 @@ struct ProfileView: View {
                                     RoundedRectangle(cornerRadius: 10)
                                         .fill(
                                             LinearGradient(
-                                                colors: [Color(hex: "#6C5CE7"), Color(hex: "#A29BFE")],
+                                                colors: [MenuLoTheme.Colors.accentPurple, MenuLoTheme.Colors.accentPurpleLight],
                                                 startPoint: .topLeading,
                                                 endPoint: .bottomTrailing
                                             )
@@ -98,9 +103,9 @@ struct ProfileView: View {
                             .cornerRadius(MenuLoTheme.CornerRadius.large)
                             .overlay(
                                 RoundedRectangle(cornerRadius: MenuLoTheme.CornerRadius.large)
-                                    .strokeBorder(Color(hex: "#6C5CE7").opacity(0.3), lineWidth: 1.5)
+                                    .strokeBorder(MenuLoTheme.Colors.accentPurple.opacity(0.3), lineWidth: 1.5)
                             )
-                            .shadow(color: Color(hex: "#6C5CE7").opacity(0.15), radius: 8, x: 0, y: 3)
+                            .shadow(color: MenuLoTheme.Colors.accentPurple.opacity(0.15), radius: 8, x: 0, y: 3)
                         }
                         .padding(.horizontal, MenuLoTheme.Spacing.lg)
 
@@ -133,6 +138,7 @@ struct ProfileView: View {
             .sheet(isPresented: $showBusinessSwitch) {
                 BusinessSwitchSheet()
             }
+            .task { await statsViewModel.fetchStats() }
         }
     }
 }
@@ -140,6 +146,7 @@ struct ProfileView: View {
 // MARK: - Profil Hero
 private struct ProfileHeroSection: View {
     let authViewModel: AuthViewModel
+    let statsViewModel: UserStatsViewModel
 
     var body: some View {
         VStack(alignment: .center, spacing: MenuLoTheme.Spacing.lg) {
@@ -155,7 +162,7 @@ private struct ProfileHeroSection: View {
                 Circle()
                     .strokeBorder(
                         LinearGradient(
-                            colors: [MenuLoTheme.Colors.primary, Color(hex: "#FF6B35")],
+                            colors: [MenuLoTheme.Colors.primary, MenuLoTheme.Colors.accentOrange],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
@@ -167,7 +174,7 @@ private struct ProfileHeroSection: View {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [MenuLoTheme.Colors.primary.opacity(0.8), Color(hex: "#FF6B35").opacity(0.8)],
+                            colors: [MenuLoTheme.Colors.primary.opacity(0.8), MenuLoTheme.Colors.accentOrange.opacity(0.8)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -220,8 +227,8 @@ private struct ProfileHeroSection: View {
                     .background(
                         LinearGradient(
                             colors: authViewModel.currentUser?.userType == .business
-                                ? [Color(hex: "#6C5CE7"), Color(hex: "#A29BFE")]
-                                : [MenuLoTheme.Colors.primary, Color(hex: "#FF6B35")],
+                                ? [MenuLoTheme.Colors.accentPurple, MenuLoTheme.Colors.accentPurpleLight]
+                                : [MenuLoTheme.Colors.primary, MenuLoTheme.Colors.accentOrange],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
@@ -232,13 +239,17 @@ private struct ProfileHeroSection: View {
 
             // İstatistik Satırı
             HStack(spacing: 0) {
-                ProfileStatItem(value: "28", label: "Ziyaret", icon: "fork.knife")
-                Divider().frame(height: 32)
-                ProfileStatItem(value: "14", label: "Favori", icon: "heart.fill")
-                Divider().frame(height: 32)
-                ProfileStatItem(value: "4.8⭐", label: "Avg Rating", icon: "star.fill")
-                Divider().frame(height: 32)
-                ProfileStatItem(value: "3", label: "Rozet", icon: "trophy.fill")
+                if statsViewModel.isLoading {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, MenuLoTheme.Spacing.md)
+                } else {
+                    ProfileStatItem(value: statsViewModel.visitCountText,    label: "Ziyaret",    icon: "fork.knife")
+                    Divider().frame(height: 32)
+                    ProfileStatItem(value: statsViewModel.favouriteCountText, label: "Favori",     icon: "heart.fill")
+                    Divider().frame(height: 32)
+                    ProfileStatItem(value: statsViewModel.avgRatingText,      label: "Avg Rating", icon: "star.fill")
+                }
             }
             .padding(.vertical, MenuLoTheme.Spacing.md)
             .background(MenuLoTheme.Colors.backgroundLight)
@@ -265,7 +276,7 @@ private struct BusinessPanelSection: View {
         VStack(alignment: .leading, spacing: MenuLoTheme.Spacing.md) {
             HStack(spacing: 6) {
                 Image(systemName: "building.2.fill")
-                    .foregroundColor(Color(hex: "#6C5CE7"))
+                    .foregroundColor(MenuLoTheme.Colors.accentPurple)
                     .font(.footnote)
                 Text("İşletme Yönetimi")
                     .font(.caption)
@@ -283,7 +294,7 @@ private struct BusinessPanelSection: View {
                 }
                 Divider().padding(.horizontal, MenuLoTheme.Spacing.lg)
                 NavigationLink(destination: MyBusinessView(restaurantId: 1)) {
-                    ProfileRow(icon: "building.2.fill",            iconColor: Color(hex: "#6C5CE7"),         title: "My Business",   subtitle: "İşletme bilgileri ve çalışma saatleri")
+                    ProfileRow(icon: "building.2.fill",            iconColor: MenuLoTheme.Colors.accentPurple,         title: "My Business",   subtitle: "İşletme bilgileri ve çalışma saatleri")
                 }
                 Divider().padding(.horizontal, MenuLoTheme.Spacing.lg)
                 NavigationLink(destination: ReviewsView(restaurantId: 0)) {
@@ -312,7 +323,7 @@ private struct BusinessSwitchSheet: View {
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [Color(hex: "#6C5CE7"), Color(hex: "#A29BFE")],
+                                colors: [MenuLoTheme.Colors.accentPurple, MenuLoTheme.Colors.accentPurpleLight],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
@@ -322,7 +333,7 @@ private struct BusinessSwitchSheet: View {
                         .font(.system(size: 44))
                         .foregroundColor(.white)
                 }
-                .shadow(color: Color(hex: "#6C5CE7").opacity(0.4), radius: 16)
+                .shadow(color: MenuLoTheme.Colors.accentPurple.opacity(0.4), radius: 16)
 
                 VStack(spacing: MenuLoTheme.Spacing.sm) {
                     Text("İşletme Hesabı Oluştur")

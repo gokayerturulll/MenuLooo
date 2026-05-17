@@ -15,8 +15,19 @@
 
 import Foundation
 
+// MARK: - Review Reply (işletme yanıtı)
+struct ReviewReply: Codable, Equatable {
+    let replyId: Int
+    let content: String
+    let createdAt: String
+    let authorName: String?
+}
+
 // MARK: - AppReview (GET response item)
-struct AppReview: Codable, Identifiable, Equatable {
+// Sadece Decodable — sunucudan gelir, geri gönderilmez. Encodable sentezi
+// flat reply alanları (reply_id, reply_content...) yüzünden başarısız olur;
+// hiç encode etmiyoruz, kaldırdık.
+struct AppReview: Decodable, Identifiable, Equatable {
     let reviewId: Int
     let restaurantId: Int
     let userId: Int
@@ -26,6 +37,7 @@ struct AppReview: Codable, Identifiable, Equatable {
     let service: Int?
     let attitude: Int?
     let createdAt: String
+    var reply: ReviewReply?
 
     var id: Int { reviewId }
 
@@ -52,6 +64,11 @@ struct AppReview: Codable, Identifiable, Equatable {
         case service       = "rating_service"
         case attitude      = "rating_attitude"
         case createdAt     = "created_at"
+        // Backend LEFT JOIN ile flat alanlar gönderiyor; reply yoksa hepsi null
+        case replyId           = "reply_id"
+        case replyContent      = "reply_content"
+        case replyCreatedAt    = "reply_created_at"
+        case replyAuthorName   = "reply_author_name"
     }
 
     /// RestaurantDetail.swift'teki defansif decoder pattern'iyle uyumlu — backend
@@ -67,6 +84,19 @@ struct AppReview: Codable, Identifiable, Equatable {
         self.service       = try? c.decode(Int.self, forKey: .service)
         self.attitude      = try? c.decode(Int.self, forKey: .attitude)
         self.createdAt     = (try? c.decode(String.self, forKey: .createdAt)) ?? ""
+
+        // Reply alanları LEFT JOIN ile flat geliyor; reply_id varsa nesneyi kur
+        if let rid = try? c.decode(Int.self, forKey: .replyId),
+           let rContent = try? c.decode(String.self, forKey: .replyContent) {
+            self.reply = ReviewReply(
+                replyId:    rid,
+                content:    rContent,
+                createdAt:  (try? c.decode(String.self, forKey: .replyCreatedAt)) ?? "",
+                authorName: try? c.decode(String.self, forKey: .replyAuthorName)
+            )
+        } else {
+            self.reply = nil
+        }
     }
 
     private static let iso: ISO8601DateFormatter = {

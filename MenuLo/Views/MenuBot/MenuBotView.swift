@@ -135,7 +135,7 @@ struct MenuBotView: View {
                             canSend
                                 ? AnyShapeStyle(
                                     LinearGradient(
-                                        colors: [MenuLoTheme.Colors.primary, Color(hex: "#FF6B35")],
+                                        colors: [MenuLoTheme.Colors.primary, MenuLoTheme.Colors.accentOrange],
                                         startPoint: .topLeading, endPoint: .bottomTrailing
                                     )
                                   )
@@ -233,7 +233,7 @@ private struct ChatBubble: View {
     private var bubbleBackground: some View {
         if message.role == .user {
             LinearGradient(
-                colors: [MenuLoTheme.Colors.primary, Color(hex: "#FF6B35")],
+                colors: [MenuLoTheme.Colors.primary, MenuLoTheme.Colors.accentOrange],
                 startPoint: .topLeading, endPoint: .bottomTrailing
             )
         } else {
@@ -246,7 +246,7 @@ private struct ChatBubble: View {
             Circle()
                 .fill(
                     LinearGradient(
-                        colors: [MenuLoTheme.Colors.primary, Color(hex: "#FF6B35")],
+                        colors: [MenuLoTheme.Colors.primary, MenuLoTheme.Colors.accentOrange],
                         startPoint: .topLeading, endPoint: .bottomTrailing
                     )
                 )
@@ -280,7 +280,7 @@ private struct TypingIndicator: View {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [MenuLoTheme.Colors.primary, Color(hex: "#FF6B35")],
+                            colors: [MenuLoTheme.Colors.primary, MenuLoTheme.Colors.accentOrange],
                             startPoint: .topLeading, endPoint: .bottomTrailing
                         )
                     )

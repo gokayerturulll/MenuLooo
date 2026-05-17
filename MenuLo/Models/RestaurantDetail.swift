@@ -41,6 +41,42 @@ struct WorkingHours: Codable, Equatable {
             "Pazar": false
         ]
     )
+
+    /// Cihazın yerel saatine göre restoran şu an açık mı?
+    /// Backend'den `working_hours` JSONB geldiyse UI bu hesabı kullanır;
+    /// yoksa Restaurant.swift'teki varsayılan `isOpen: true` devreye girer.
+    func isOpenNow(at date: Date = Date()) -> Bool {
+        let cal      = Calendar(identifier: .gregorian)
+        let weekday  = cal.component(.weekday, from: date)   // 1=Pazar, 2=Pzt...
+        let dayName  = Self.weekdayName(weekday)
+        if openDays[dayName] != true { return false }
+
+        let h = cal.component(.hour,   from: date)
+        let m = cal.component(.minute, from: date)
+        let nowMin   = h * 60 + m
+        let openMin  = openHour  * 60 + openMinute
+        let closeMin = closeHour * 60 + closeMinute
+
+        // Standart vaka: açılış < kapanış (örn. 09:00 → 22:00)
+        if openMin <= closeMin {
+            return nowMin >= openMin && nowMin < closeMin
+        }
+        // Gece yarısını aşan vardiya (örn. 18:00 → 02:00)
+        return nowMin >= openMin || nowMin < closeMin
+    }
+
+    private static func weekdayName(_ weekday: Int) -> String {
+        switch weekday {
+        case 1: return "Pazar"
+        case 2: return "Pazartesi"
+        case 3: return "Salı"
+        case 4: return "Çarşamba"
+        case 5: return "Perşembe"
+        case 6: return "Cuma"
+        case 7: return "Cumartesi"
+        default: return ""
+        }
+    }
 }
 
 // MARK: - Restaurant Detail (GET response data)

@@ -7,74 +7,48 @@
 //
 
 import SwiftUI
-import UIKit
 
 // MARK: - MenuLo Tema Tanımları
 
 /// Uygulama genelinde kullanılan renk ve tipografi sabitleri.
 ///
-/// Kullanım:
-/// ```swift
-/// Text("Başlık")
-///     .font(MenuLoTheme.Fonts.title)
-///     .foregroundColor(MenuLoTheme.Colors.primary)
-/// ```
+/// Tüm renkler `Assets.xcassets` içindeki color set'lere bağlıdır; her renkin
+/// light/dark varyantı Asset Catalog'da tanımlıdır, sistem trait değişiminde
+/// otomatik geçiş yapılır.
 struct MenuLoTheme {
-    
+
     // MARK: - Renkler
-    
-    /// Uygulama renk paleti.
-    ///
-    /// **Brand renkleri** (primary, success, warning, error) sabittir — marka kimliği
-    /// her iki modda aynı kalır.
-    /// **Semantic renkler** (background, card, text, divider) iOS sistem trait'ine
-    /// göre otomatik olarak light ↔ dark arasında geçiş yapar.
+
     struct Colors {
 
-        // MARK: Brand (sabit, marka kimliği)
+        // MARK: Brand
+        static let primary = Color("Primary")
+        static let success = Color("Success")
+        static let warning = Color("Warning")
+        static let error   = Color("ErrorColor")
 
-        /// Ana marka rengi — turuncu (#FFA63B)
-        static let primary = Color(hex: "#FFA63B")
+        // MARK: Accent palette (gradient ikinci renkleri, dekoratif paletler)
+        static let accentOrange      = Color("AccentOrange")
+        static let accentPurple      = Color("AccentPurple")
+        static let accentPurpleLight = Color("AccentPurpleLight")
+        static let accentIndigo      = Color("AccentIndigo")
+        static let accentIndigoLight = Color("AccentIndigoLight")
+        static let accentBlue        = Color("AccentBlue")
+        static let accentBlueLight   = Color("AccentBlueLight")
+        static let accentMint        = Color("AccentMint")
+        static let accentPeach       = Color("AccentPeach")
+        static let accentRed         = Color("AccentRed")
+        static let accentDeepOrange  = Color("AccentDeepOrange")
 
-        /// Başarı rengi (yeşil — Green Menu vb.)
-        static let success = Color(hex: "#00B894")
+        // MARK: Semantic
+        static let backgroundLight = Color("BackgroundLight")
+        static let cardBackground  = Color("CardBackground")
+        static let textPrimary     = Color("TextPrimary")
+        static let textSecondary   = Color("TextSecondary")
+        static let divider         = Color("Divider")
 
-        /// Uyarı rengi
-        static let warning = Color(hex: "#FDCB6E")
-
-        /// Hata rengi
-        static let error = Color(hex: "#E17055")
-
-        // MARK: Semantic (light/dark adaptive)
-
-        /// Sayfa arka planı — açık modda neredeyse beyaz, koyu modda neredeyse siyah
-        static let backgroundLight = adaptive(light: "#F8F9FA", dark: "#0F1116")
-
-        /// Kart arka planı — açık modda saf beyaz, koyu modda elevated yüzey
-        static let cardBackground = adaptive(light: "#FFFFFF", dark: "#1C1C1E")
-
-        /// Ana metin rengi — açık modda koyu, koyu modda neredeyse beyaz
-        static let textPrimary = adaptive(light: "#2D3436", dark: "#F2F2F7")
-
-        /// İkincil metin rengi (açıklamalar, alt başlıklar)
-        static let textSecondary = adaptive(light: "#636E72", dark: "#98989F")
-
-        /// Ayırıcı çizgi rengi
-        static let divider = adaptive(light: "#DFE6E9", dark: "#38383A")
-
-        /// Geriye dönük uyum: bazı view'lar `backgroundDark`'ı doğrudan referans
-        /// ediyor olabilir. Yeni adaptive `backgroundLight`'a yönlendirildi.
+        /// Geriye dönük uyum: bazı view'lar `backgroundDark`'ı doğrudan referans ediyor.
         static let backgroundDark = backgroundLight
-
-        // MARK: Helpers
-
-        /// Bir UIColor closure üzerinden iki hex string arasında otomatik
-        /// light/dark seçimi yapan SwiftUI Color üretir.
-        private static func adaptive(light: String, dark: String) -> Color {
-            Color(uiColor: UIColor { trait in
-                UIColor(Color(hex: trait.userInterfaceStyle == .dark ? dark : light))
-            })
-        }
     }
     
     // MARK: - Tipografi (Gabarito Font Ailesi)

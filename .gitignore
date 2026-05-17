@@ -25,3 +25,10 @@ Analysis\ Report*.pdf
 node_modules/
 .env
 *.log
+
+# Auto-generated ngrok config
+MenuLo/Utilities/NgrokURL.swift
+*NgrokURL 2.swift
+
+# Claude/Agent Workspace Context
+.claude/

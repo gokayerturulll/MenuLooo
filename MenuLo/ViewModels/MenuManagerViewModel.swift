@@ -95,6 +95,30 @@ final class MenuManagerViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Photo Upload
+    @discardableResult
+    func uploadPhoto(itemId: Int, imageData: Data) async -> Bool {
+        if isSubmitting { return false }
+        isSubmitting = true
+        defer { isSubmitting = false }
+        do {
+            let newUrl = try await NetworkManager.shared.uploadMenuItemPhoto(
+                itemId:    itemId,
+                imageData: imageData
+            )
+            // Local cache'i güncelle — UI image_url'e bakıp anında yeni fotoğrafı çizer
+            if let idx = items.firstIndex(where: { $0.itemId == itemId }) {
+                var copy = items[idx]
+                copy.imageUrl = newUrl
+                items[idx] = copy
+            }
+            return true
+        } catch {
+            present(error)
+            return false
+        }
+    }
+
     // MARK: - Delete
     @discardableResult
     func delete(itemId: Int) async -> Bool {

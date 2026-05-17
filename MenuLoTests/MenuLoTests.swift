@@ -11,13 +11,13 @@ final class MenuLoTests: XCTestCase {
     func testUserModelDecoding() throws {
         let json = """
         {
-            "id": 1,
-            "name": "Test Kullanıcı",
+            "user_id": 1,
+            "username": "Test Kullanıcı",
             "email": "test@menulo.com",
-            "user_type": "customer"
+            "role": "Customer"
         }
         """.data(using: .utf8)!
-        
+
         let user = try JSONDecoder().decode(User.self, from: json)
         XCTAssertEqual(user.id, 1)
         XCTAssertEqual(user.name, "Test Kullanıcı")

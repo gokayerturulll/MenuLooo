@@ -11,6 +11,13 @@ struct MainTabView: View {
     // Arka plan / ön plan geçişlerini yakalamak için
     @Environment(\.scenePhase) private var scenePhase
 
+    // Deep link yönlendirme
+    @EnvironmentObject private var deepLinkRouter: DeepLinkRouter
+    @EnvironmentObject private var discoverVM:     DiscoverViewModel
+
+    // Deep link ile açılacak restoran detay ekranı
+    @State private var deepLinkRestaurant: Restaurant?
+
     var body: some View {
         ZStack(alignment: .bottom) {
 
@@ -27,8 +34,8 @@ struct MainTabView: View {
                     .tabItem { Label("Harita", systemImage: selectedTab == 1 ? "map.fill" : "map") }
                     .tag(1)
 
-                // Tab 2: QR / Grup Karar Odası
-                NavigationStack { QRScanView() }
+                // Tab 2: Grup Karar Odası
+                NavigationStack { RoomListView() }
                     .tabItem { Label("Oda", systemImage: selectedTab == 2 ? "qrcode.viewfinder" : "qrcode") }
                     .tag(2)
 
@@ -56,7 +63,7 @@ struct MainTabView: View {
                         Circle()
                             .fill(
                                 LinearGradient(
-                                    colors: [MenuLoTheme.Colors.primary, Color(hex: "#FF6B35")],
+                                    colors: [MenuLoTheme.Colors.primary, MenuLoTheme.Colors.accentOrange],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
@@ -77,6 +84,39 @@ struct MainTabView: View {
             }
         }
         .ignoresSafeArea(.keyboard)
+        // MARK: - Bildirim İzni
+        .onAppear {
+            NotificationManager.shared.requestPermission()
+        }
+        // MARK: - Deep Link: Restoran Detayı
+        .sheet(item: $deepLinkRestaurant) { restaurant in
+            NavigationStack {
+                RestaurantDetailView(restaurant: restaurant)
+            }
+        }
+        // MARK: - Deep Link: Restoran listesi yüklenince bekleyen deep link'i çöz
+        .onChange(of: discoverVM.restaurants) { restaurants in
+            guard case .restaurant(let id) = deepLinkRouter.pending,
+                  let found = restaurants.first(where: { $0.restaurantId == id }) else { return }
+            deepLinkRestaurant = found
+            deepLinkRouter.pending = nil
+        }
+        // MARK: - Deep Link: Yönlendirme
+        .onChange(of: deepLinkRouter.pending) { destination in
+            guard let destination else { return }
+            switch destination {
+            case .room:
+                selectedTab = 2
+                // RoomListView pending'i okuyup odaya katılmayı kendisi yönetir
+            case .restaurant(let id):
+                selectedTab = 0
+                if let found = discoverVM.restaurants.first(where: { $0.restaurantId == id }) {
+                    deepLinkRestaurant = found
+                    deepLinkRouter.pending = nil
+                }
+                // Bulunamazsa discoverVM.restaurants yüklenince yukarıdaki onChange devreye girer
+            }
+        }
         // MARK: - Socket Yaşam Döngüsü
         .onChange(of: scenePhase) { phase in
             switch phase {
@@ -98,4 +138,7 @@ struct MainTabView: View {
 #Preview {
     MainTabView()
         .environmentObject(AuthViewModel())
+        .environmentObject(DiscoverViewModel())
+        .environmentObject(DeepLinkRouter())
+        .environmentObject(FavouritesManager.shared)
 }

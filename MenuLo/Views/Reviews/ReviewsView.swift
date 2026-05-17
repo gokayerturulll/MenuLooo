@@ -12,9 +12,17 @@ struct ReviewsView: View {
     var restaurantId: Int = 0
     var menuItems: [MenuDetailItem] = []
 
+    @EnvironmentObject var authVM: AuthViewModel
     @StateObject private var viewModel = ReviewViewModel()
     @State private var showWriteSheet = false
     @State private var ratingFilter = 0
+
+    /// Yalnız işletme rolündeki kullanıcı yorumlara yanıt verebilir.
+    /// Backend zaten ownership doğrulaması yapıyor; UI buton görünürlüğü ile
+    /// hatalı isteği engelliyor.
+    private var canReply: Bool {
+        authVM.currentUser?.userType == .business
+    }
 
     private var filteredReviews: [AppReview] {
         guard ratingFilter != 0 else { return viewModel.reviews }
@@ -81,7 +89,12 @@ struct ReviewsView: View {
                         } else {
                             VStack(spacing: MenuLoTheme.Spacing.md) {
                                 ForEach(filteredReviews) { review in
-                                    ReviewCard(review: review)
+                                    ReviewCard(
+                                        review: review,
+                                        canReply: canReply,
+                                        viewModel: viewModel,
+                                        restaurantId: restaurantId
+                                    )
                                 }
                             }
                             .padding(.horizontal, MenuLoTheme.Spacing.lg)
@@ -186,9 +199,14 @@ private struct RatingSummaryCard: View {
 // MARK: - Yorum Kartı
 private struct ReviewCard: View {
     let review: AppReview
+    let canReply: Bool
+    @ObservedObject var viewModel: ReviewViewModel
+    let restaurantId: Int
+
     @State private var isHelpful = false
 
     private var displayName: String { review.userName ?? "Kullanıcı" }
+    private var isComposingReply: Bool { viewModel.replyingToReviewId == review.reviewId }
 
     private var avatarLetter: String {
         String(displayName.prefix(1)).uppercased()
@@ -266,6 +284,20 @@ private struct ReviewCard: View {
                     .lineSpacing(4)
             }
 
+            // İşletme yanıtı varsa göster (her kullanıcı görür)
+            if let reply = review.reply {
+                replyDisplay(reply)
+            }
+
+            // Compose alanı — yalnız işletme sahibi ve henüz yanıt yoksa
+            if canReply, review.reply == nil {
+                if isComposingReply {
+                    replyComposeArea
+                } else {
+                    replyButton
+                }
+            }
+
             // Yararlı Butonu
             HStack {
                 Button {
@@ -286,6 +318,97 @@ private struct ReviewCard: View {
         .background(MenuLoTheme.Colors.cardBackground)
         .cornerRadius(MenuLoTheme.CornerRadius.large)
         .shadow(color: .black.opacity(0.05), radius: 6, x: 0, y: 2)
+    }
+
+    // MARK: - Reply Alt Görünümleri
+
+    private func replyDisplay(_ reply: ReviewReply) -> some View {
+        HStack(alignment: .top, spacing: MenuLoTheme.Spacing.sm) {
+            Image(systemName: "building.2.fill")
+                .foregroundColor(MenuLoTheme.Colors.primary)
+                .padding(8)
+                .background(MenuLoTheme.Colors.primary.opacity(0.12))
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(reply.authorName ?? "İşletme Yanıtı")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(MenuLoTheme.Colors.primary)
+                Text(reply.content)
+                    .font(MenuLoTheme.Fonts.body)
+                    .foregroundColor(MenuLoTheme.Colors.textPrimary)
+                    .lineSpacing(3)
+            }
+            Spacer()
+        }
+        .padding(MenuLoTheme.Spacing.md)
+        .background(MenuLoTheme.Colors.primary.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: MenuLoTheme.CornerRadius.medium))
+    }
+
+    private var replyButton: some View {
+        Button {
+            viewModel.startReplying(to: review.reviewId)
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "arrowshape.turn.up.left.fill")
+                Text("Yanıtla")
+            }
+            .font(MenuLoTheme.Fonts.caption)
+            .foregroundColor(MenuLoTheme.Colors.primary)
+        }
+    }
+
+    private var replyComposeArea: some View {
+        VStack(alignment: .leading, spacing: MenuLoTheme.Spacing.sm) {
+            Text("İşletme yanıtı")
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(MenuLoTheme.Colors.textSecondary)
+
+            TextField("Yanıtınızı yazın...", text: $viewModel.replyDraft, axis: .vertical)
+                .font(MenuLoTheme.Fonts.body)
+                .lineLimit(2...5)
+                .padding(MenuLoTheme.Spacing.sm)
+                .background(MenuLoTheme.Colors.backgroundLight)
+                .clipShape(RoundedRectangle(cornerRadius: MenuLoTheme.CornerRadius.medium))
+
+            HStack {
+                Button("İptal") {
+                    viewModel.cancelReply()
+                }
+                .font(MenuLoTheme.Fonts.caption)
+                .foregroundColor(MenuLoTheme.Colors.textSecondary)
+
+                Spacer()
+
+                Button {
+                    Task { await viewModel.submitReply(restaurantId: restaurantId) }
+                } label: {
+                    HStack(spacing: 4) {
+                        if viewModel.isSendingReply {
+                            ProgressView()
+                                .scaleEffect(0.6)
+                        } else {
+                            Image(systemName: "paperplane.fill")
+                        }
+                        Text("Gönder")
+                    }
+                    .font(MenuLoTheme.Fonts.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, MenuLoTheme.Spacing.md)
+                    .padding(.vertical, 6)
+                    .background(MenuLoTheme.Colors.primary)
+                    .clipShape(Capsule())
+                }
+                .disabled(viewModel.isSendingReply || viewModel.replyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(MenuLoTheme.Spacing.md)
+        .background(MenuLoTheme.Colors.primary.opacity(0.04))
+        .clipShape(RoundedRectangle(cornerRadius: MenuLoTheme.CornerRadius.medium))
     }
 }
 

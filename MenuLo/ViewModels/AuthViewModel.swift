@@ -154,8 +154,30 @@ class AuthViewModel: ObservableObject {
         }
     }
     
+    // MARK: - Session Expiry Observer
+
+    private var sessionObserver: NSObjectProtocol?
+
+    /// 401 NotificationCenter mesajını dinleyerek otomatik çıkış yapar.
+    func startObservingSessionExpiry() {
+        sessionObserver = NotificationCenter.default.addObserver(
+            forName: .userSessionExpired,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            // Closure non-isolated; @MainActor logout()'a güvenli sıçra
+            Task { @MainActor in self?.logout() }
+        }
+    }
+
+    deinit {
+        if let obs = sessionObserver {
+            NotificationCenter.default.removeObserver(obs)
+        }
+    }
+
     // MARK: - Çıkış (Logout)
-    
+
     /// Kullanıcı oturumunu sonlandırır.
     func logout() {
         KeychainHelper.delete(forKey: AppConstants.keychainTokenKey)

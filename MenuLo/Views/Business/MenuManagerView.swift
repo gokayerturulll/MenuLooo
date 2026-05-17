@@ -11,6 +11,7 @@
 //
 
 import SwiftUI
+import PhotosUI
 
 // MARK: - MenuManagerView
 struct MenuManagerView: View {
@@ -85,6 +86,9 @@ struct MenuManagerView: View {
                                             onEdit: { editingItem = item },
                                             onDelete: {
                                                 Task { await viewModel.delete(itemId: item.itemId) }
+                                            },
+                                            onPhotoData: { data in
+                                                Task { await viewModel.uploadPhoto(itemId: item.itemId, imageData: data) }
                                             }
                                         )
                                         if idx < group.items.count - 1 {
@@ -275,10 +279,50 @@ private struct ManagerItemRow: View {
     let item: OwnerMenuItem
     let onEdit: () -> Void
     let onDelete: () -> Void
+    let onPhotoData: (Data) -> Void
+
+    @State private var photoItem: PhotosPickerItem?
+    @State private var showPhotoPicker = false
+    @State private var photoError: String?
+
+    /// Backend image_url'i "/uploads/menu/abc.jpg" formatında dönüyor;
+    /// apiBaseURL'in /api kısmını çıkarıp host root'una ekleyerek tam URL kur.
+    private func absoluteImageURL(from path: String) -> URL? {
+        if let u = URL(string: path), u.scheme != nil { return u }     // zaten tam URL
+        let host = AppConstants.apiBaseURL.replacingOccurrences(of: "/api", with: "")
+        let prefix = path.hasPrefix("/") ? "" : "/"
+        return URL(string: "\(host)\(prefix)\(path)")
+    }
 
     var body: some View {
         Button(action: onEdit) { rowContent }
             .buttonStyle(.plain)
+            .photosPicker(
+                isPresented: $showPhotoPicker,
+                selection: $photoItem,
+                matching: .images,
+                photoLibrary: .shared()
+            )
+            .onChange(of: photoItem) { newItem in
+                guard let newItem else { return }
+                Task {
+                    if let data = try? await newItem.loadTransferable(type: Data.self) {
+                        // 5 MB hard limit — backend de aynı sınırı dayatıyor
+                        if data.count > 5 * 1024 * 1024 {
+                            photoError = "Fotoğraf 5 MB sınırını aşıyor."
+                        } else {
+                            onPhotoData(data)
+                        }
+                    }
+                    // Tekrar seçim için reset
+                    photoItem = nil
+                }
+            }
+            .alert("Fotoğraf hatası", isPresented: .constant(photoError != nil)) {
+                Button("Tamam") { photoError = nil }
+            } message: {
+                Text(photoError ?? "")
+            }
     }
 
     private var emoji: String {
@@ -302,7 +346,25 @@ private struct ManagerItemRow: View {
                           ? MenuLoTheme.Colors.success.opacity(0.15)
                           : MenuLoTheme.Colors.primary.opacity(0.12))
                     .frame(width: 56, height: 56)
-                Text(emoji).font(.system(size: 28))
+
+                // imageUrl varsa fotoğrafı göster (backend /uploads/menu/...);
+                // yoksa kategoriye göre emoji placeholder
+                if let urlString = item.imageUrl,
+                   let url = absoluteImageURL(from: urlString) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let img):
+                            img.resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 56, height: 56)
+                                .clipShape(RoundedRectangle(cornerRadius: MenuLoTheme.CornerRadius.medium))
+                        default:
+                            Text(emoji).font(.system(size: 28))
+                        }
+                    }
+                } else {
+                    Text(emoji).font(.system(size: 28))
+                }
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -350,6 +412,12 @@ private struct ManagerItemRow: View {
             Spacer()
 
             Menu {
+                Button {
+                    showPhotoPicker = true
+                } label: {
+                    Label(item.imageUrl == nil ? "Fotoğraf Ekle" : "Fotoğrafı Değiştir",
+                          systemImage: "photo.fill")
+                }
                 Button(action: onEdit) {
                     Label("Düzenle", systemImage: "pencil")
                 }
@@ -407,7 +475,7 @@ private struct EmptyMenuState: View {
                 .padding(.vertical, 12)
                 .background(
                     LinearGradient(
-                        colors: [MenuLoTheme.Colors.primary, Color(hex: "#FF6B35")],
+                        colors: [MenuLoTheme.Colors.primary, MenuLoTheme.Colors.accentOrange],
                         startPoint: .leading, endPoint: .trailing
                     )
                 )
@@ -438,7 +506,7 @@ private struct CategoryChip: View {
                     isSelected
                         ? AnyView(
                             LinearGradient(
-                                colors: [MenuLoTheme.Colors.primary, Color(hex: "#FF6B35")],
+                                colors: [MenuLoTheme.Colors.primary, MenuLoTheme.Colors.accentOrange],
                                 startPoint: .leading, endPoint: .trailing
                             )
                           )

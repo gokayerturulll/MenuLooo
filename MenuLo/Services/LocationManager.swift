@@ -1,8 +1,10 @@
 import Foundation
 import CoreLocation
+import OSLog
 
 class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
 
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.menulo", category: "LocationManager")
     private let manager = CLLocationManager()
 
     @Published var userLocation: CLLocationCoordinate2D?
@@ -48,6 +50,6 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         // CLError.locationUnknown is transient; only log real failures
         if let clError = error as? CLError, clError.code == .locationUnknown { return }
-        print("[LocationManager] Konum alınamadı: \(error.localizedDescription)")
+        logger.error("Konum alınamadı: \(error.localizedDescription, privacy: .public)")
     }
 }

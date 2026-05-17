@@ -3,13 +3,25 @@ import Foundation
 enum AppConstants {
 
     // MARK: - API Konfigürasyonu
-    // Gerçek cihaz testlerinde DEVICE_API_URL env var'ı veya xcconfig ile override edilebilir.
-    // Derleme öncesi bu değeri aktif backend adresine güncelleyin.
+    // DEBUG: localhost üzerinden geliştirme.
+    // RELEASE: API_BASE_URL Info.plist anahtarı zorunlu — xcconfig ile inject edilir.
+    //          Placeholder veya boş değer fatalError ile derhal çöktürür — sessiz
+    //          başarısızlık yerine yanlış DNS'e gitme riski engellenir.
     #if DEBUG
-    static let apiBaseURL = "http://localhost:3000/api"
+    /// Build Phase script ngrok URL'ini NgrokURL.swift dosyasına yazar.
+    /// Ngrok yoksa localhost'a düşer.
+    static let apiBaseURL = NgrokConfig.baseURL
     #else
-    static let apiBaseURL = ProcessInfo.processInfo.environment["API_BASE_URL"]
-        ?? "https://your-production-server.com/api"
+    static let apiBaseURL: String = {
+        let value = Bundle.main.object(forInfoDictionaryKey: "API_BASE_URL") as? String ?? ""
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              !trimmed.contains("your-production-server"),
+              trimmed.hasPrefix("https://") else {
+            fatalError("API_BASE_URL Info.plist anahtarı release build için zorunludur (https:// ile başlayan gerçek bir adres).")
+        }
+        return trimmed
+    }()
     #endif
 
     static let socketURL = apiBaseURL.replacingOccurrences(of: "/api", with: "")

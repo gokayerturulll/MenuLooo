@@ -14,19 +14,24 @@ import SwiftUI
 struct MyBusinessView: View {
 
     @StateObject private var viewModel: MyBusinessViewModel
+    @State private var restaurantStats: RestaurantStats? = nil
+    @State private var statsLoading = false
+
+    private let restaurantId: Int
 
     init(restaurantId: Int = 1) {
+        self.restaurantId = restaurantId
         _viewModel = StateObject(wrappedValue: MyBusinessViewModel(restaurantId: restaurantId))
     }
 
     let dayOrder = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
 
-    private let stats: [(icon: String, label: String, value: String, color: Color)] = [
-        ("eye.fill",   "Görüntülenme", "1.2K", Color(hex: "#6C5CE7")),
-        ("star.fill",  "Puan",         "4.7",  Color(hex: "#FDCB6E")),
-        ("heart.fill", "Favori",       "248",  Color(hex: "#E17055")),
-        ("leaf.fill",  "Yeşil Menü",   "3",    MenuLoTheme.Colors.success),
-    ]
+    @MainActor
+    private func loadStats() async {
+        statsLoading = true
+        defer { statsLoading = false }
+        restaurantStats = try? await NetworkManager.shared.fetchRestaurantStats(restaurantId: restaurantId)
+    }
 
     var body: some View {
         ScrollView {
@@ -65,8 +70,14 @@ struct MyBusinessView: View {
         } message: {
             Text(viewModel.errorMessage ?? "Bilinmeyen bir hata.")
         }
-        .task { await viewModel.load() }
-        .refreshable { await viewModel.load(force: true) }
+        .task {
+            await viewModel.load()
+            await loadStats()
+        }
+        .refreshable {
+            await viewModel.load(force: true)
+            await loadStats()
+        }
     }
 
     // MARK: - Form
@@ -74,17 +85,26 @@ struct MyBusinessView: View {
         VStack(spacing: MenuLoTheme.Spacing.lg) {
 
             // İstatistikler
-            LazyVGrid(
-                columns: [GridItem(.flexible()), GridItem(.flexible()),
-                          GridItem(.flexible()), GridItem(.flexible())],
-                spacing: MenuLoTheme.Spacing.sm
-            ) {
-                ForEach(stats, id: \.label) { stat in
-                    StatCard(icon: stat.icon, label: stat.label,
-                             value: stat.value, color: stat.color)
+            if statsLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, MenuLoTheme.Spacing.lg)
+            } else {
+                LazyVGrid(
+                    columns: [GridItem(.flexible()), GridItem(.flexible()),
+                              GridItem(.flexible()), GridItem(.flexible())],
+                    spacing: MenuLoTheme.Spacing.sm
+                ) {
+                    let rating = restaurantStats.map { String(format: "%.1f", $0.avgRating) } ?? "-"
+                    let reviews = restaurantStats.map { "\($0.reviewCount)" } ?? "-"
+                    let price   = restaurantStats?.priceRange ?? "-"
+                    StatCard(icon: "star.fill",  label: "Puan",        value: rating,  color: MenuLoTheme.Colors.warning)
+                    StatCard(icon: "bubble.left.fill", label: "Yorum",  value: reviews, color: MenuLoTheme.Colors.accentPurple)
+                    StatCard(icon: "turkishlirasign.circle.fill", label: "Fiyat", value: price, color: MenuLoTheme.Colors.error)
+                    StatCard(icon: "leaf.fill",   label: "Yeşil Menü", value: "3",     color: MenuLoTheme.Colors.success)
                 }
+                .padding(.horizontal, MenuLoTheme.Spacing.lg)
             }
-            .padding(.horizontal, MenuLoTheme.Spacing.lg)
 
             // İşletme Bilgileri
             BusinessSection(title: "İşletme Bilgileri", icon: "info.circle.fill") {
@@ -227,7 +247,7 @@ private struct MyBusinessHero: View {
                     LinearGradient(
                         colors: [
                             MenuLoTheme.Colors.primary.opacity(0.85),
-                            Color(hex: "#FF6B35").opacity(0.95)
+                            MenuLoTheme.Colors.accentOrange.opacity(0.95)
                         ],
                         startPoint: .topLeading, endPoint: .bottomTrailing
                     )

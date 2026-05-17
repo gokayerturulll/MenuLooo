@@ -17,6 +17,11 @@ settings:
     ENABLE_HARDENED_RUNTIME: YES
     ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
+packages:
+  SocketIO:
+    url: https://github.com/socketio/socket.io-client-swift
+    from: 16.1.0
+
 targets:
   MenuLo:
     type: application
@@ -31,6 +36,9 @@ targets:
     resources:
       - path: MenuLo/Resources
         optional: true
+    
+    dependencies:
+      - package: SocketIO
     
     info:
       path: MenuLo/Info.plist
@@ -63,6 +71,12 @@ targets:
           - Gabarito-Bold.ttf
           - Gabarito-ExtraBold.ttf
         
+        # --- Deep Link URL Scheme ---
+        CFBundleURLTypes:
+          - CFBundleURLName: com.menulo.deeplink
+            CFBundleURLSchemes:
+              - menulo
+
         # --- Ağ Güvenliği (geliştirme için localhost'a izin) ---
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: false
@@ -71,6 +85,11 @@ targets:
               NSExceptionAllowsInsecureHTTPLoads: true
               NSIncludesSubdomains: true
     
+    preBuildScripts:
+      - name: Fetch Ngrok URL
+        script: '"${SRCROOT}/scripts/fetch_ngrok_url.sh"'
+        basedOnDependencyAnalysis: false
+
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.menulo.app
@@ -93,6 +112,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.menulo.tests
+        GENERATE_INFOPLIST_FILE: YES
 
 schemes:
   MenuLo:

@@ -2,7 +2,7 @@ services:
 
   # ── PostgreSQL ──────────────────────────────────────────────────────────────
   db:
-    image: postgres:16-alpine
+    build: ./db
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${DB_NAME:-menulo_db}
@@ -13,7 +13,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-menulo} -d ${DB_NAME:-menulo_db}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-menulo} -d ${DB_NAME:-menulo_db}" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -24,12 +24,17 @@ services:
     restart: unless-stopped
     depends_on:
       db:
-        condition: service_healthy   # DB tam hazır olmadan başlama
+        condition: service_healthy # DB tam hazır olmadan başlama
     env_file:
       - ./backend/.env
     environment:
-      # .env'deki DB_HOST'u override et — container içinde "localhost" değil "db"
+      # Docker içinde bu değerler .env'i override eder
+      # DB_HOST mutlaka "db" olmalı (servis adı = hostname)
       DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-menulo_db}
+      DB_USER: ${DB_USER:-menulo}
+      DB_PASSWORD: ${DB_PASSWORD:-menulo_secret}
     ports:
       - "3000:3000"
 

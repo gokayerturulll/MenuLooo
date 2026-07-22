@@ -1,0 +1,37 @@
+services:
+
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-menulo_db}
+      POSTGRES_USER: ${DB_USER:-menulo}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-menulo_secret}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-menulo} -d ${DB_NAME:-menulo_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Node.js Backend ─────────────────────────────────────────────────────────
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy   # DB tam hazır olmadan başlama
+    env_file:
+      - ./backend/.env
+    environment:
+      # .env'deki DB_HOST'u override et — container içinde "localhost" değil "db"
+      DB_HOST: db
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:

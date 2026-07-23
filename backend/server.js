@@ -8,6 +8,8 @@ const rateLimit = require('express-rate-limit');
 const { Server } = require('socket.io');
 require('dotenv').config();
 
+const { register, httpRequestDuration, httpRequestTotal } = require('./config/metrics');
+
 const authRoutes         = require('./routes/authRoutes');
 const restaurantRoutes   = require('./routes/restaurantRoutes');
 const menuRoutes         = require('./routes/menuRoutes');
@@ -81,6 +83,27 @@ const menubotLimiter = rateLimit({
 
 // ─── Health check (Docker HEALTHCHECK bunu kullanır) ──────────────────────────
 app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
+
+// ─── Prometheus metrikleri ─────────────────────────────────────────────────────
+// Her isteğin süresini ve sonucunu ölçer. Route için gerçek path yerine
+// pattern kullanıyoruz (ör. "/api/menu/:id"), yoksa her farklı ID ayrı bir
+// metrik etiketi (label) yaratıp Prometheus'u şişirir (cardinality patlaması).
+app.use((req, res, next) => {
+    const start = process.hrtime();
+    res.on('finish', () => {
+        const [s, ns] = process.hrtime(start);
+        const duration = s + ns / 1e9;
+        const route = (req.baseUrl || '') + (req.route ? req.route.path : '') || 'unmatched';
+        httpRequestDuration.labels(req.method, route, String(res.statusCode)).observe(duration);
+        httpRequestTotal.labels(req.method, route, String(res.statusCode)).inc();
+    });
+    next();
+});
+
+app.get('/metrics', async (req, res) => {
+    res.set('Content-Type', register.contentType);
+    res.end(await register.metrics());
+});
 
 // ─── REST Rotalar ─────────────────────────────────────────────────────────────
 app.use('/api/auth',                          authRoutes);

@@ -41,10 +41,11 @@ if (process.env.NODE_ENV === 'production' && ALLOWED_ORIGINS.length === 0) {
     process.exit(1);
 }
 
-// Production proxy (ELB / Heroku / Ngrok) arkasında gerçek IP'yi al
-if (process.env.NODE_ENV === 'production') {
-    app.set('trust proxy', 1);
-}
+// Reverse-proxy / tünel arkasında gerçek istemci IP'sini almak için:
+//   - production: 1 hop (ELB / Heroku / Nginx)
+//   - dev/staging: loopback (ngrok agent localhost'tan istek atar; rate-limit
+//     uyarısını da susturur — X-Forwarded-For yalnızca 127.0.0.1 için trust edilir)
+app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : 'loopback');
 
 // ─── Güvenlik başlıkları ───────────────────────────────────────────────────────
 app.use(helmet());
@@ -67,14 +68,9 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
 }));
 
 // ─── Rate Limiters ────────────────────────────────────────────────────────────
-const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 20,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { success: false, message: 'Çok fazla istek gönderildi. Lütfen 15 dakika sonra tekrar deneyin.' },
-});
-
+// authLimiter, authRoutes.js içinde sadece login/register/şifre kurtarma
+// endpoint'lerine uygulanır. /api/auth/me/* gibi authenticated user-info
+// endpoint'leri muaftır (Profil açılışlarında kotayı tüketmesin diye).
 const menubotLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 30,
@@ -83,8 +79,11 @@ const menubotLimiter = rateLimit({
     message: { success: false, message: 'Çok fazla MenuBot isteği. Lütfen biraz bekleyin.' },
 });
 
+// ─── Health check (Docker HEALTHCHECK bunu kullanır) ──────────────────────────
+app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
+
 // ─── REST Rotalar ─────────────────────────────────────────────────────────────
-app.use('/api/auth',          authLimiter,    authRoutes);
+app.use('/api/auth',                          authRoutes);
 app.use('/api/restaurants',                   restaurantRoutes);
 app.use('/api/menu',                          menuRoutes);
 app.use('/api/menubot',       menubotLimiter, menubotRoutes);
@@ -555,6 +554,27 @@ process.on('uncaughtException', (err) => {
     console.error('[uncaughtException]', err);
     httpServer.close(() => process.exit(1));
 });
+
+// ─── Graceful shutdown (docker compose stop/down → SIGTERM) ──────────────────
+function gracefulShutdown(signal) {
+    console.log(`\n${signal} alındı, sunucu düzgünce kapatılıyor...`);
+    httpServer.close(async () => {
+        console.log('HTTP sunucu kapandı, devam eden istek kalmadı.');
+        try {
+            const pool = require('./config/db');
+            await pool.end();
+            console.log('PostgreSQL bağlantı havuzu kapandı.');
+        } catch (err) {
+            console.error('Kapatma sırasında hata:', err.message);
+        }
+        process.exit(0);
+    });
+    // 10 sn içinde temiz kapanma olmazsa zorla çık (asılı kalan bağlantı vs.)
+    setTimeout(() => process.exit(1), 10_000).unref();
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // ─── Sunucu Başlatma ─────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;

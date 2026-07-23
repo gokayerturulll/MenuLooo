@@ -6,9 +6,10 @@ services:
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     healthCheckPath: /health
-    # Sunucu başlamadan ÖNCE migration'ları çalıştırır (bizim local `migrate`
-    # servisiyle aynı işi görüyor, sadece Render'a özel mekanizma)
-    preDeployCommand: node migrations/run.js
+    # preDeployCommand ücretsiz planda desteklenmiyor — bunun yerine container
+    # her başladığında önce migration'ları (idempotent, zaten uygulananları
+    # atlıyor), sonra sunucuyu çalıştırıyoruz.
+    dockerCommand: sh -c "node migrations/run.js && node server.js"
     envVars:
       - key: NODE_ENV
         value: production

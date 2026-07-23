@@ -39,12 +39,33 @@ const embeddingModel = genAI.getGenerativeModel({ model: 'gemini-embedding-001' 
 // 1) DB hazırlığı: extension + kolon + boyut güncelleme
 // ----------------------------------------------------------------------------
 async function prepareSchema() {
-    console.log('🔧 Şema hazırlanıyor (vector extension + embedding kolonu)…');
+    console.log('🔧 Şema kontrol ediliyor (vector extension + embedding kolonu)…');
 
     await pool.query('CREATE EXTENSION IF NOT EXISTS vector');
 
+    // Kolon zaten doğru boyuttaysa hiçbir şeye dokunma — mevcut embedding'leri
+    // silmemek için idempotent kontrol (script her `docker compose up`'ta
+    // güvenle tekrar çalışabilsin diye).
+    const { rows } = await pool.query(`
+        SELECT format_type(a.atttypid, a.atttypmod) AS col_type
+        FROM pg_attribute a
+        WHERE a.attrelid = 'menu_item'::regclass
+          AND a.attname = 'embedding'
+          AND NOT a.attisdropped
+    `);
+    const currentType = rows[0]?.col_type;
+    const expectedType = `vector(${EMBEDDING_DIM})`;
+
+    if (currentType === expectedType) {
+        console.log(`   ↳ embedding kolonu zaten ${expectedType}, dokunulmadı.\n`);
+        return;
+    }
+
+    console.log(`   ↳ Kolon boyutu uyuşmuyor (${currentType || 'yok'} → ${expectedType}), yeniden oluşturuluyor…`);
+
     // Eski boyutta (örn. 1536) veriler ALTER TYPE'ı engelliyor; DROP + ADD ile boyutu güncelle.
     // DROP COLUMN beraberinde eski HNSW index'ini de siler — aşağıda yeniden oluşturuluyor.
+    // Bu dal sadece boyut gerçekten uyuşmadığında çalışır, yoksa mevcut embedding'ler silinmez.
     await pool.query('ALTER TABLE menu_item DROP COLUMN IF EXISTS embedding');
     await pool.query(`
         ALTER TABLE menu_item
@@ -80,6 +101,7 @@ async function fetchMenuItemsWithContext() {
         JOIN category c   ON c.category_id   = mi.category_id
         JOIN menu m       ON m.menu_id       = c.menu_id
         JOIN restaurant r ON r.restaurant_id = m.restaurant_id
+        WHERE mi.embedding IS NULL
         ORDER BY mi.item_id ASC
     `);
     return rows;

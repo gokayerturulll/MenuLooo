@@ -62,3 +62,22 @@ jobs:
 
       - name: Push et
         run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/menulo-backend:latest
+
+  push-db-to-dockerhub:
+    runs-on: ubuntu-latest
+    needs: docker-build
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Docker Hub'a giriş yap
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: DB image'ı build et ve etiketle
+        run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/menulo-db:latest ./db
+
+      - name: Push et
+        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/menulo-db:latest

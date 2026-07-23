@@ -9,7 +9,7 @@ services:
       POSTGRES_USER: ${DB_USER:-menulo}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-menulo_secret}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5433:5432" # host'ta native Postgres 5432'yi kullandığı için 5433'e aldık
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -18,18 +18,38 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── Node.js Backend ─────────────────────────────────────────────────────────
-  backend:
+  # ── DB Migration (tek seferlik) ──────────────────────────────────────────────
+  migrate:
     build: ./backend
-    restart: unless-stopped
+    restart: "no" # sürekli çalışmaz, işi bitince kapanır
     depends_on:
       db:
         condition: service_healthy # DB tam hazır olmadan başlama
     env_file:
       - ./backend/.env
     environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-menulo_db}
+      DB_USER: ${DB_USER:-menulo}
+      DB_PASSWORD: ${DB_PASSWORD:-menulo_secret}
+    command: [ "npm", "run", "migrate" ]
+
+  # ── Node.js Backend ─────────────────────────────────────────────────────────
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    init: true # PID 1 yerine tini kullan → SIGTERM düzgün iletilsin
+    depends_on:
+      db:
+        condition: service_healthy # DB tam hazır olmadan başlama
+      migrate:
+        condition: service_completed_successfully # migration'lar bitmeden başlama
+    env_file:
+      - ./backend/.env
+    environment:
       # Docker içinde bu değerler .env'i override eder
-      # DB_HOST mutlaka "db" olmalı (servis adı = hostname)
+      NODE_ENV: ${NODE_ENV:-development}
       DB_HOST: db
       DB_PORT: 5432
       DB_NAME: ${DB_NAME:-menulo_db}

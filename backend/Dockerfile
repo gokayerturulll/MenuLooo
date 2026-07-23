@@ -1,21 +1,28 @@
-# ── Base image ──────────────────────────────────────────────────────────────
-FROM node:20-alpine
+# ── 1. Aşama (deps): sadece bağımlılıkları kurmak için ───────────────────────
+FROM node:20-alpine AS deps
 
-# ── Çalışma dizini ──────────────────────────────────────────────────────────
 WORKDIR /app
-
-# ── Önce sadece dependency dosyalarını kopyala (cache için) ─────────────────
-# package.json değişmezse npm install tekrar çalışmaz → hızlı build
 COPY package.json package-lock.json ./
 
-# ── Production dependency'leri kur ─────────────────────────────────────────
 RUN npm install --omit=dev
 
-# ── Kaynak kodları kopyala ──────────────────────────────────────────────────
+# ── 2. Aşama (runtime): gerçek çalışacak image ────────────────────────────────
+FROM node:20-alpine
+
+WORKDIR /app
+
+# 1. aşamada kurulan node_modules'ı kopyala (npm install'ı tekrar çalıştırmaya
+# gerek yok, 1. aşamanın build araçları/cache'i bu image'a hiç girmiyor)
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# ── Uygulamanın dinlediği port ───────────────────────────────────────────────
+# /app içindeki her şeyi "node" kullanıcısına devret ki root olmadan çalışsın
+RUN chown -R node:node /app
+USER node
+
 EXPOSE 3000
 
-# ── Container başladığında çalışacak komut ──────────────────────────────────
+HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
+
 CMD ["node", "server.js"]

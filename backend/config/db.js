@@ -7,6 +7,7 @@ const pool = new Pool({
     database: process.env.DB_NAME,
     password: process.env.DB_PASSWORD,
     port:     parseInt(process.env.DB_PORT || '5432', 10),
+    ssl:      process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
     // Bağlantı havuzu limitleri — production'da servis çöküşlerine karşı koruma
     max:                  parseInt(process.env.DB_POOL_MAX || '20', 10),
     idleTimeoutMillis:    30_000,   // 30s boşta kalan bağlantıyı kapat

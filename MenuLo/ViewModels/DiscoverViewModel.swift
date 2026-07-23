@@ -60,8 +60,19 @@ class DiscoverViewModel: ObservableObject {
     }
 
     /// Filtre çekmecesinden dönen yeni durumu uygular ve listeyi yeniden yükler.
+    /// Kategori chip'inden bağımsızdır — mevcut `category` korunur.
     func applyFilter(_ newFilter: RestaurantFilter) async {
-        filter = newFilter
+        var merged = newFilter
+        merged.category = filter.category
+        filter = merged
+        await fetchNearbyRestaurants(forceRefresh: true)
+    }
+
+    /// Discover chip seçimini uygular: `nil` → tüm restoranlar; aksi halde
+    /// `restaurant.categories && [category]` ile backend tarafında filtrelenir.
+    func applyCategory(_ category: String?) async {
+        guard filter.category != category else { return }
+        filter.category = category
         await fetchNearbyRestaurants(forceRefresh: true)
     }
 

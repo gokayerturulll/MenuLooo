@@ -109,11 +109,16 @@ struct ReviewsView: View {
                     }
 
                     // MARK: - Yorum Yaz Butonu
-                    PrimaryButton(title: "Yorum Yaz") {
-                        showWriteSheet = true
+                    if restaurantId > 0 {
+                        PrimaryButton(title: "Yorum Yaz") {
+                            showWriteSheet = true
+                        }
+                        .padding(.horizontal, MenuLoTheme.Spacing.lg)
+                        .padding(.bottom, MenuLoTheme.Spacing.xl)
+                    } else {
+                        Spacer()
+                            .padding(.bottom, MenuLoTheme.Spacing.xl)
                     }
-                    .padding(.horizontal, MenuLoTheme.Spacing.lg)
-                    .padding(.bottom, MenuLoTheme.Spacing.xl)
                 }
                 .padding(.top, MenuLoTheme.Spacing.md)
             }
@@ -121,7 +126,6 @@ struct ReviewsView: View {
             .navigationTitle("Yorumlar ve Puanlar")
             .navigationBarTitleDisplayMode(.large)
             .task {
-                guard restaurantId > 0 else { return }
                 await viewModel.fetchReviews(restaurantId: restaurantId)
             }
             .sheet(isPresented: $showWriteSheet) {

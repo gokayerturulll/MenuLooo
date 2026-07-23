@@ -61,6 +61,8 @@ struct RestaurantFilter: Equatable {
     var radiusKm: Double? = nil
     var openNow: Bool = false
     var sort: RestaurantSortOption = .bestMatch
+    /// Tekil kategori filtresi (Discover chip seçimi). `restaurant.categories && [category]` ile eşleşir.
+    var category: String? = nil
 
     /// Backend'in beklediği query parametrelerine dönüştürür.
     /// Konum yoksa `radius` parametresi atlanır (backend de yok sayar).
@@ -78,6 +80,10 @@ struct RestaurantFilter: Equatable {
         if !dietaryTags.isEmpty {
             let csv = dietaryTags.map(\.rawValue).sorted().joined(separator: ",")
             items.append(URLQueryItem(name: "dietary", value: csv))
+        }
+
+        if let category, !category.isEmpty {
+            items.append(URLQueryItem(name: "category", value: category))
         }
 
         if openNow {

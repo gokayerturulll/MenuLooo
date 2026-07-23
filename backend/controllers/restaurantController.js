@@ -39,6 +39,7 @@ const IS_OPEN_EXPR = `
  *   lat, lng     — kullanıcı koordinatı (PostGIS distance hesabı için)
  *   radius       — km cinsinden mesafe filtresi (lat+lng yoksa yok sayılır)
  *   dietary      — virgülle ayrılmış tag listesi ("Vegan,Glutensiz") — OR semantiği
+ *   category     — virgülle ayrılmış kategori listesi ("Pizza,Hamburger") — restaurant.categories ile OR semantiği
  *   open_now     — "true" ise sadece açık olanlar
  *   sort         — best_match | rating_desc | distance_asc | price_asc | price_desc
  */
@@ -55,6 +56,10 @@ exports.getAllRestaurants = async (req, res) => {
 
         const dietary   = typeof req.query.dietary === 'string' && req.query.dietary.length > 0
             ? req.query.dietary.split(',').map(s => s.trim()).filter(Boolean).slice(0, 10)
+            : null;
+
+        const categories = typeof req.query.category === 'string' && req.query.category.length > 0
+            ? req.query.category.split(',').map(s => s.trim()).filter(Boolean).slice(0, 10)
             : null;
 
         const sort      = req.query.sort || 'best_match';
@@ -92,6 +97,11 @@ exports.getAllRestaurants = async (req, res) => {
             )`);
         }
 
+        if (categories && categories.length > 0) {
+            const cP = place(categories);
+            whereClauses.push(`r.categories && ${cP}::text[]`);
+        }
+
         if (openNow) {
             whereClauses.push(`(${IS_OPEN_EXPR}) = true`);
         }
@@ -115,6 +125,7 @@ exports.getAllRestaurants = async (req, res) => {
                 r.business_name,
                 r.address,
                 r.cuisine_type,
+                COALESCE(r.categories, ARRAY[]::text[]) AS categories,
                 ST_X(r.location_point::geometry) AS longitude,
                 ST_Y(r.location_point::geometry) AS latitude,
                 COALESCE(

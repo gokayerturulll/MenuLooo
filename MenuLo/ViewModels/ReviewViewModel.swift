@@ -45,7 +45,12 @@ final class ReviewViewModel: ObservableObject {
         isLoading = true
         errorMessage = nil
         do {
-            let list = try await NetworkManager.shared.fetchReviews(restaurantId: restaurantId)
+            let list: [AppReview]
+            if restaurantId == 0 {
+                list = try await NetworkManager.shared.fetchUserReviews()
+            } else {
+                list = try await NetworkManager.shared.fetchReviews(restaurantId: restaurantId)
+            }
             self.reviews = list
             self.loadedRestaurantId = restaurantId
         } catch {

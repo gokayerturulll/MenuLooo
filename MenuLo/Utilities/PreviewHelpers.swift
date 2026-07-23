@@ -21,6 +21,7 @@ extension Restaurant {
                 latitude: 40.9852, longitude: 29.0251,
                 avgRating: 4.5, reviewCount: 120,
                 priceRange: "₺₺", cuisineType: "Burger",
+                categories: ["Hamburger"],
                 distanceM: 350, isOpenNow: true
             ),
             Restaurant(
@@ -30,6 +31,7 @@ extension Restaurant {
                 latitude: 40.9785, longitude: 29.1411,
                 avgRating: 4.2, reviewCount: 89,
                 priceRange: "₺", cuisineType: "Kebap",
+                categories: ["Döner"],
                 distanceM: 1200, isOpenNow: true
             ),
             Restaurant(
@@ -39,6 +41,7 @@ extension Restaurant {
                 latitude: 40.9745, longitude: 29.0398,
                 avgRating: 4.8, reviewCount: 234,
                 priceRange: "₺₺₺", cuisineType: "Akdeniz",
+                categories: ["Steak", "Makarna", "Salata"],
                 distanceM: 800, isOpenNow: false
             ),
             Restaurant(
@@ -48,6 +51,7 @@ extension Restaurant {
                 latitude: 40.9732, longitude: 29.0965,
                 avgRating: 4.1, reviewCount: 67,
                 priceRange: "₺₺", cuisineType: "Pizza",
+                categories: ["Pizza"],
                 distanceM: 2100, isOpenNow: true
             ),
             Restaurant(
@@ -57,6 +61,7 @@ extension Restaurant {
                 latitude: 40.9912, longitude: 29.1213,
                 avgRating: 4.6, reviewCount: 180,
                 priceRange: "₺₺₺", cuisineType: "Sushi",
+                categories: ["Sushi"],
                 distanceM: 3500, isOpenNow: true
             ),
         ]

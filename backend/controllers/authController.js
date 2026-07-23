@@ -86,7 +86,7 @@ exports.login = async (req, res) => {
         }
 
         const result = await pool.query(
-            'SELECT * FROM "user" WHERE email = $1',
+            'SELECT user_id, username, email, role, password_hash FROM "user" WHERE email = $1',
             [email.toLowerCase().trim()]
         );
         if (result.rows.length === 0) {
@@ -189,8 +189,13 @@ exports.forgotPassword = async (req, res) => {
 
         // PLACEHOLDER: gerçek email entegrasyonu yapılana kadar console'a yazılıyor
         // Production'da: SendGrid / Mailgun / Amazon SES ile email at
-        const resetLink = `${process.env.APP_URL || 'menulo://'}reset-password?token=${rawToken}`;
-        console.log(`[forgotPassword] Email: ${normalized} | Reset link: ${resetLink}`);
+        // Ham token sadece development'ta log'lanır; prod log'unda sızdırma yapma.
+        if (process.env.NODE_ENV !== 'production') {
+            const resetLink = `${process.env.APP_URL || 'menulo://'}reset-password?token=${rawToken}`;
+            console.log(`[forgotPassword] (dev only) Email: ${normalized} | Reset link: ${resetLink}`);
+        } else {
+            console.log(`[forgotPassword] reset token issued for user_id=${userId}`);
+        }
 
         return res.status(200).json(genericResponse);
     } catch (error) {

@@ -53,37 +53,40 @@ struct MainTabView: View {
             // RoomViewModel tüm tab'larda erişilebilir olsun
             .environmentObject(roomViewModel)
 
-            // MARK: - Floating Action Button (MenuBot)
-            HStack {
-                Spacer()
-                Button {
-                    showMenuBot = true
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [MenuLoTheme.Colors.primary, MenuLoTheme.Colors.accentOrange],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
+            // MARK: - Floating Action Button (MenuBot) — sadece Keşfet ve Harita sekmelerinde
+            if selectedTab == 0 || selectedTab == 1 {
+                HStack {
+                    Spacer()
+                    Button {
+                        showMenuBot = true
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [MenuLoTheme.Colors.primary, MenuLoTheme.Colors.accentOrange],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
                                 )
-                            )
-                            .frame(width: 60, height: 60)
-                            .shadow(color: MenuLoTheme.Colors.primary.opacity(0.55), radius: 14, x: 0, y: 6)
+                                .frame(width: 60, height: 60)
+                                .shadow(color: MenuLoTheme.Colors.primary.opacity(0.55), radius: 14, x: 0, y: 6)
 
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 24, weight: .semibold))
-                            .foregroundColor(.white)
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 24, weight: .semibold))
+                                .foregroundColor(.white)
+                        }
                     }
+                    .padding(.trailing, MenuLoTheme.Spacing.lg)
+                    .padding(.bottom, 120)
                 }
-                .padding(.trailing, MenuLoTheme.Spacing.lg)
-                .padding(.bottom, 120)
-                .fullScreenCover(isPresented: $showMenuBot) {
-                    MenuBotView(restaurantId: nil)
-                }
+                .transition(.opacity)
             }
         }
         .ignoresSafeArea(.keyboard)
+        .fullScreenCover(isPresented: $showMenuBot) {
+            MenuBotView(restaurantId: nil)
+        }
         // MARK: - Bildirim İzni
         .onAppear {
             NotificationManager.shared.requestPermission()

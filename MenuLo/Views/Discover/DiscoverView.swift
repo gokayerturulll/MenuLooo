@@ -17,29 +17,57 @@ struct DiscoverView: View {
 
     enum ViewMode { case list, map }
 
-    let categories = ["Tümü", "🍕 Pizza", "🍔 Burger", "🥗 Vegan", "🍣 Sushi", "🍰 Tatlı", "🍜 Ramen", "🦐 Deniz Ürünleri", "☕️ Kahve"]
+    /// Chip etiketi → backend `restaurant.categories` değerleri.
+    /// `dbValue == nil` → "Tümü" (kategori filtresi uygulanmaz).
+    /// Seed dosyasındaki kategori sözlüğüyle birebir hizalı:
+    /// Pizza, Hamburger, Salata, Sushi, Steak, Döner, Makarna, Çorba, Tatlı, Deniz Ürünleri, Ramen, Vegan, Kahve.
+    static let categoryOptions: [(label: String, dbValue: String?)] = [
+        ("Tümü",                nil),
+        ("🍕 Pizza",            "Pizza"),
+        ("🍔 Burger",           "Hamburger"),
+        ("🥗 Vegan",            "Vegan"),
+        ("🥬 Salata",           "Salata"),
+        ("🍣 Sushi",            "Sushi"),
+        ("🥩 Steak",            "Steak"),
+        ("🥙 Döner",            "Döner"),
+        ("🍝 Makarna",          "Makarna"),
+        ("🍲 Çorba",            "Çorba"),
+        ("🍰 Tatlı",            "Tatlı"),
+        ("🍜 Ramen",            "Ramen"),
+        ("🦐 Deniz Ürünleri",  "Deniz Ürünleri"),
+        ("☕️ Kahve",            "Kahve"),
+    ]
 
     @EnvironmentObject var viewModel: DiscoverViewModel
 
     fileprivate var filteredRestaurants: [Restaurant] {
-        let sourceList = Array(viewModel.restaurants.prefix(10))
-        let catFiltered: [Restaurant]
-        if selectedCategory == "Tümü" {
-            catFiltered = sourceList
-        } else {
-            let cleanCat = selectedCategory.components(separatedBy: " ").dropFirst().joined(separator: " ")
-            catFiltered = sourceList.filter { $0.tags.contains(where: { $0.contains(cleanCat) }) || $0.cuisine.contains(cleanCat) }
-        }
-        guard !searchText.isEmpty else { return catFiltered }
-        return catFiltered.filter {
+        // Kategori filtresi artık backend tarafında uygulanıyor (viewModel.filter.category).
+        // Burada yalnızca yerel arama metni uygulanır.
+        let sourceList = viewModel.restaurants
+        guard !searchText.isEmpty else { return sourceList }
+        return sourceList.filter {
             $0.name.localizedCaseInsensitiveContains(searchText) ||
             $0.cuisine.localizedCaseInsensitiveContains(searchText)
         }
     }
 
+    private func dbValue(for label: String) -> String? {
+        Self.categoryOptions.first(where: { $0.label == label })?.dbValue
+    }
+
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
+        VStack(spacing: 0) {
+
+                // MARK: - Custom Header
+                HStack {
+                    Text("Keşfet")
+                        .font(.system(size: 34, weight: .bold))
+                        .foregroundColor(MenuLoTheme.Colors.textPrimary)
+                    Spacer()
+                }
+                .padding(.horizontal, MenuLoTheme.Spacing.lg)
+                .padding(.top, MenuLoTheme.Spacing.xs)
+                .padding(.bottom, MenuLoTheme.Spacing.sm)
 
                 // MARK: - Search Bar
                 HStack(spacing: MenuLoTheme.Spacing.sm) {
@@ -87,9 +115,10 @@ struct DiscoverView: View {
                 // MARK: - Kategori Chips
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: MenuLoTheme.Spacing.sm) {
-                        ForEach(categories, id: \.self) { cat in
-                            DiscoverCategoryChip(label: cat, isSelected: selectedCategory == cat) {
-                                withAnimation(.spring(response: 0.3)) { selectedCategory = cat }
+                        ForEach(Self.categoryOptions, id: \.label) { option in
+                            DiscoverCategoryChip(label: option.label, isSelected: selectedCategory == option.label) {
+                                withAnimation(.spring(response: 0.3)) { selectedCategory = option.label }
+                                Task { await viewModel.applyCategory(option.dbValue) }
                             }
                         }
                     }
@@ -159,14 +188,12 @@ struct DiscoverView: View {
                 }
             }
             .background(MenuLoTheme.Colors.backgroundLight)
-            .navigationTitle("Keşfet")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarHidden(true)
             .sheet(isPresented: $showFilterSheet) {
                 FilterSheetView(filter: viewModel.filter) { applied in
                     Task { await viewModel.applyFilter(applied) }
                 }
             }
-        }
     }
 }
 

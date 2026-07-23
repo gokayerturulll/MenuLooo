@@ -15,12 +15,22 @@ struct ProfileView: View {
     @State private var showBusinessSwitch = false
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 0) {
+        ScrollView {
+            VStack(spacing: 0) {
 
-                    // MARK: - Hero Section
-                    ProfileHeroSection(authViewModel: authViewModel, statsViewModel: statsViewModel)
+                // MARK: - Custom Header
+                HStack {
+                    Text("Profil")
+                        .font(.system(size: 34, weight: .bold))
+                        .foregroundColor(MenuLoTheme.Colors.textPrimary)
+                    Spacer()
+                }
+                .padding(.horizontal, MenuLoTheme.Spacing.lg)
+                .padding(.top, MenuLoTheme.Spacing.xs)
+                .padding(.bottom, MenuLoTheme.Spacing.sm)
+
+                // MARK: - Hero Section
+                ProfileHeroSection(authViewModel: authViewModel, statsViewModel: statsViewModel)
 
                     // MARK: - İşletme Paneli (sadece business user için)
                     if authViewModel.currentUser?.userType == .business {
@@ -32,7 +42,9 @@ struct ProfileView: View {
 
                         // Geçmiş Siparişler
                         ProfileMenuGroup(title: "Aktivitelerim", icon: "clock.fill") {
-                            ProfileRow(icon: "bag.fill",           iconColor: MenuLoTheme.Colors.primary,       title: "Geçmiş Siparişlerim",   subtitle: "Tüm sipariş geçmişini gör")
+                            NavigationLink(destination: PlaceholderView(title: "Geçmiş Siparişlerim")) {
+                                ProfileRow(icon: "bag.fill",           iconColor: MenuLoTheme.Colors.primary,       title: "Geçmiş Siparişlerim",   subtitle: "Tüm sipariş geçmişini gör")
+                            }
                             Divider().padding(.horizontal, MenuLoTheme.Spacing.lg)
                             NavigationLink(destination: FavouritesView()) {
                                 ProfileRow(icon: "heart.fill",        iconColor: .red,                             title: "Favorilerim",            subtitle: "Beğendiğin restoranlar ve ürünler")
@@ -42,24 +54,36 @@ struct ProfileView: View {
                                 ProfileRow(icon: "star.fill",          iconColor: .yellow,                          title: "Yorumlarım",             subtitle: "Yazdığın değerlendirmeler")
                             }
                             Divider().padding(.horizontal, MenuLoTheme.Spacing.lg)
-                            ProfileRow(icon: "trophy.fill",        iconColor: MenuLoTheme.Colors.warning,            title: "Rozetlerim",             subtitle: "Kazandığın ödül rozetleri")
+                            NavigationLink(destination: PlaceholderView(title: "Rozetlerim")) {
+                                ProfileRow(icon: "trophy.fill",        iconColor: MenuLoTheme.Colors.warning,            title: "Rozetlerim",             subtitle: "Kazandığın ödül rozetleri")
+                            }
                         }
 
                         // Hesap Ayarları
                         ProfileMenuGroup(title: "Hesap Ayarları", icon: "gearshape.fill") {
-                            ProfileRow(icon: "person.crop.circle.fill", iconColor: MenuLoTheme.Colors.primary, title: "Profil Bilgilerini Düzenle", subtitle: "Ad, fotoğraf, iletişim")
+                            NavigationLink(destination: PlaceholderView(title: "Profil Bilgilerini Düzenle")) {
+                                ProfileRow(icon: "person.crop.circle.fill", iconColor: MenuLoTheme.Colors.primary, title: "Profil Bilgilerini Düzenle", subtitle: "Ad, fotoğraf, iletişim")
+                            }
                             Divider().padding(.horizontal, MenuLoTheme.Spacing.lg)
-                            ProfileRow(icon: "faceid",              iconColor: MenuLoTheme.Colors.success,       title: "Face ID / Touch ID",     subtitle: "Biyometrik güvenli giriş")
+                            NavigationLink(destination: PlaceholderView(title: "Face ID / Touch ID")) {
+                                ProfileRow(icon: "faceid",              iconColor: MenuLoTheme.Colors.success,       title: "Face ID / Touch ID",     subtitle: "Biyometrik güvenli giriş")
+                            }
                             Divider().padding(.horizontal, MenuLoTheme.Spacing.lg)
-                            ProfileRow(icon: "bell.badge.fill",     iconColor: MenuLoTheme.Colors.warning,       title: "Bildirimler",            subtitle: "Yeşil Menü ve fırsat uyarıları")
+                            NavigationLink(destination: PlaceholderView(title: "Bildirimler")) {
+                                ProfileRow(icon: "bell.badge.fill",     iconColor: MenuLoTheme.Colors.warning,       title: "Bildirimler",            subtitle: "Yeşil Menü ve fırsat uyarıları")
+                            }
                             Divider().padding(.horizontal, MenuLoTheme.Spacing.lg)
-                            ProfileRow(icon: "globe",               iconColor: MenuLoTheme.Colors.accentPurple,            title: "Dil ve Bölge",           subtitle: "Türkçe · Türkiye")
+                            NavigationLink(destination: PlaceholderView(title: "Dil ve Bölge")) {
+                                ProfileRow(icon: "globe",               iconColor: MenuLoTheme.Colors.accentPurple,            title: "Dil ve Bölge",           subtitle: "Türkçe · Türkiye")
+                            }
                             Divider().padding(.horizontal, MenuLoTheme.Spacing.lg)
                             NavigationLink(destination: ChangePasswordView()) {
                                 ProfileRow(icon: "key.fill",        iconColor: MenuLoTheme.Colors.primary,       title: "Şifreyi Değiştir",      subtitle: "Mevcut şifreni güncelle")
                             }
                             Divider().padding(.horizontal, MenuLoTheme.Spacing.lg)
-                            ProfileRow(icon: "lock.shield.fill",    iconColor: MenuLoTheme.Colors.error,         title: "Gizlilik ve Güvenlik",   subtitle: "Veri ve hesap koruması")
+                            NavigationLink(destination: PlaceholderView(title: "Gizlilik ve Güvenlik")) {
+                                ProfileRow(icon: "lock.shield.fill",    iconColor: MenuLoTheme.Colors.error,         title: "Gizlilik ve Güvenlik",   subtitle: "Veri ve hesap koruması")
+                            }
                         }
 
                         // İşletme Hesabına Geç
@@ -132,14 +156,12 @@ struct ProfileView: View {
                     .padding(.top, MenuLoTheme.Spacing.lg)
                 }
             }
-            .background(MenuLoTheme.Colors.backgroundLight)
-            .navigationTitle("Profil")
-            .navigationBarTitleDisplayMode(.large)
-            .sheet(isPresented: $showBusinessSwitch) {
-                BusinessSwitchSheet()
-            }
-            .task { await statsViewModel.fetchStats() }
+        .background(MenuLoTheme.Colors.backgroundLight)
+        .navigationBarHidden(true)
+        .sheet(isPresented: $showBusinessSwitch) {
+            BusinessSwitchSheet()
         }
+        .task { await statsViewModel.fetchStats() }
     }
 }
 
@@ -454,6 +476,32 @@ private struct ProfileRow: View {
         }
         .padding(.horizontal, MenuLoTheme.Spacing.lg)
         .padding(.vertical, 12)
+    }
+}
+
+// MARK: - Placeholder View
+struct PlaceholderView: View {
+    let title: String
+    
+    var body: some View {
+        VStack(spacing: MenuLoTheme.Spacing.lg) {
+            Image(systemName: "hammer.fill")
+                .font(.system(size: 60))
+                .foregroundColor(MenuLoTheme.Colors.primary)
+            
+            Text("\(title) Çok Yakında!")
+                .font(MenuLoTheme.Fonts.title)
+                .foregroundColor(MenuLoTheme.Colors.textPrimary)
+                .multilineTextAlignment(.center)
+            
+            Text("Bu özellik üzerinde çalışıyoruz. Lütfen daha sonra tekrar deneyin.")
+                .font(MenuLoTheme.Fonts.body)
+                .foregroundColor(MenuLoTheme.Colors.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, MenuLoTheme.Spacing.xl)
+        }
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

@@ -65,6 +65,36 @@ exports.getRestaurantReviews = async (req, res) => {
     }
 };
 
+// ─── GET /me/reviews ────────────────────────────────────────────────────────
+exports.getUserReviews = async (req, res) => {
+    const userId = req.user?.user_id;
+    if (!userId) {
+        return res.status(401).json({ success: false, message: 'Oturum bilgisi alınamadı.' });
+    }
+
+    try {
+        const { rows } = await pool.query(
+            `SELECT ${REVIEW_SELECT_COLUMNS},
+                    rr.reply_id          AS reply_id,
+                    rr.content           AS reply_content,
+                    rr.created_at        AS reply_created_at,
+                    ru.username          AS reply_author_name
+             FROM review r
+             JOIN "user" u ON u.user_id = r.user_id
+             LEFT JOIN review_reply rr ON rr.review_id = r.review_id
+             LEFT JOIN "user" ru ON ru.user_id = rr.user_id
+             WHERE r.user_id = $1
+             ORDER BY r.created_at DESC`,
+            [userId]
+        );
+
+        res.status(200).json({ success: true, count: rows.length, data: rows });
+    } catch (err) {
+        console.error('Error fetching user reviews:', err.message);
+        res.status(500).json({ success: false, message: 'Yorumlarınız getirilirken sunucu hatası oluştu.' });
+    }
+};
+
 // ─── POST /restaurants/:id/reviews ──────────────────────────────────────────
 
 exports.addReview = async (req, res) => {

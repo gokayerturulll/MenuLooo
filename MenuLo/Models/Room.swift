@@ -130,6 +130,7 @@ struct RoomRestaurant: Identifiable, Codable {
             reviewCount:  nil,
             priceRange:   nil,
             cuisineType:  cuisineType,
+            categories:   categories,
             distanceM:    nil,
             isOpenNow:    nil
         )

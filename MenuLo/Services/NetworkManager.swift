@@ -309,6 +309,15 @@ class NetworkManager {
 
     // MARK: - Reviews
 
+    func fetchUserReviews() async throws -> [AppReview] {
+        guard let url = URL(string: "\(baseURL)/auth/me/reviews") else {
+            throw NetworkError.badURL
+        }
+        let (data, response) = try await session.data(for: authedRequest(url: url, method: "GET"))
+        try Self.validateStatus(response, errorPayload: data)
+        return try decoder.decode(ReviewListResponse.self, from: data).data
+    }
+
     func fetchReviews(restaurantId: Int) async throws -> [AppReview] {
         guard let url = URL(string: "\(baseURL)/restaurants/\(restaurantId)/reviews") else {
             throw NetworkError.badURL
@@ -385,11 +394,11 @@ class NetworkManager {
         }
 
         var body = Data()
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"photo\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
-        body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
+        body.append(Data("--\(boundary)\r\n".utf8))
+        body.append(Data("Content-Disposition: form-data; name=\"photo\"; filename=\"\(filename)\"\r\n".utf8))
+        body.append(Data("Content-Type: \(mimeType)\r\n\r\n".utf8))
         body.append(imageData)
-        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        body.append(Data("\r\n--\(boundary)--\r\n".utf8))
         request.httpBody = body
 
         let (data, response) = try await session.data(for: request)

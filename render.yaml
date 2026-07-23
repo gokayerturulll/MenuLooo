@@ -1,0 +1,64 @@
+services:
+  - type: web
+    name: menulo-backend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    # Sunucu başlamadan ÖNCE migration'ları çalıştırır (bizim local `migrate`
+    # servisiyle aynı işi görüyor, sadece Render'a özel mekanizma)
+    preDeployCommand: node migrations/run.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DB_SSL
+        value: "true"
+      - key: DB_HOST
+        fromDatabase:
+          name: menulo-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: menulo-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: menulo-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: menulo-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: menulo-db
+          property: password
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 30d
+      - key: APNS_BUNDLE_ID
+        value: com.menulo.app
+      - key: SOCKET_CORS_ORIGIN
+        value: "*"
+      # Aşağıdakiler gizli/ortama özel değerler — Render Blueprint'i uygularken
+      # dashboard üzerinden elle girmen istenecek, repoya hiç yazılmıyor.
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: APNS_KEY_ID
+        sync: false
+      - key: APNS_TEAM_ID
+        sync: false
+
+databases:
+  - name: menulo-db
+    plan: free

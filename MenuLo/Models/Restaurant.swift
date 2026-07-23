@@ -78,6 +78,7 @@ struct Restaurant: Codable, Identifiable, Hashable {
     let reviewCount: Int?
     let priceRange: String?
     let cuisineType: String?
+    let categories: [String]?
 
     /// PostGIS ile hesaplanmış mesafe (metre). `?lat=&lng=` query'si gönderilmediyse nil.
     let distanceM: Double?
@@ -101,7 +102,10 @@ struct Restaurant: Codable, Identifiable, Hashable {
     var rating: Double { avgRating ?? 0.0 }
     var reviewCountDisplay: Int { reviewCount ?? 0 }
     var priceRangeDisplay: String { priceRange ?? "₺₺" }
-    var tags: [String] { [cuisine] }
+    var tags: [String] {
+        if let cats = categories, !cats.isEmpty { return cats }
+        return [cuisine]
+    }
     var emoji: String { "🍽️" }
     var isOpen: Bool { isOpenNow ?? true }
 
@@ -127,6 +131,7 @@ struct Restaurant: Codable, Identifiable, Hashable {
         case reviewCount  = "review_count"
         case priceRange   = "price_range"
         case cuisineType  = "cuisine_type"
+        case categories
         case distanceM    = "distance_m"
         case isOpenNow    = "is_open"
     }

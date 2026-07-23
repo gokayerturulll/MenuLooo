@@ -26,8 +26,18 @@ struct FavouritesView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
+        VStack(spacing: 0) {
+
+                // MARK: - Custom Header
+                HStack {
+                    Text("Favorilerim")
+                        .font(.system(size: 34, weight: .bold))
+                        .foregroundColor(MenuLoTheme.Colors.textPrimary)
+                    Spacer()
+                }
+                .padding(.horizontal, MenuLoTheme.Spacing.lg)
+                .padding(.top, MenuLoTheme.Spacing.xs)
+                .padding(.bottom, MenuLoTheme.Spacing.sm)
 
                 if sortedRestaurants.isEmpty {
                     // MARK: - Empty State
@@ -128,10 +138,8 @@ struct FavouritesView: View {
                     }
                 }
             }
-            .background(MenuLoTheme.Colors.backgroundLight)
-            .navigationTitle("Favorilerim")
-            .navigationBarTitleDisplayMode(.large)
-        }
+        .background(MenuLoTheme.Colors.backgroundLight)
+        .navigationBarHidden(true)
     }
 }
 

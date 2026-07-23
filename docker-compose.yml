@@ -35,6 +35,25 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-menulo_secret}
     command: [ "npm", "run", "migrate" ]
 
+  # ── MenuBot Embedding Seed (tek seferlik, idempotent) ────────────────────────
+  # Sadece embedding'i eksik olan menü ürünlerini işler — zaten doluysa saniyeler
+  # içinde biter, gereksiz Gemini API çağrısı yapmaz.
+  seed-embeddings:
+    build: ./backend
+    restart: "no"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    env_file:
+      - ./backend/.env
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-menulo_db}
+      DB_USER: ${DB_USER:-menulo}
+      DB_PASSWORD: ${DB_PASSWORD:-menulo_secret}
+    command: [ "node", "scripts/seed_embeddings.js" ]
+
   # ── Node.js Backend ─────────────────────────────────────────────────────────
   backend:
     build: ./backend
@@ -45,6 +64,8 @@ services:
         condition: service_healthy # DB tam hazır olmadan başlama
       migrate:
         condition: service_completed_successfully # migration'lar bitmeden başlama
+      seed-embeddings:
+        condition: service_completed_successfully # embedding'ler hazır olmadan başlama
     env_file:
       - ./backend/.env
     environment:

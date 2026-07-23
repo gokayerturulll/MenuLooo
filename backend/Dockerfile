@@ -17,8 +17,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # /app içindeki her şeyi "node" kullanıcısına devret ki root olmadan çalışsın
-# entrypoint.sh'a çalıştırma izni de burada veriyoruz
-RUN chmod +x entrypoint.sh && chown -R node:node /app
+RUN chown -R node:node /app
 USER node
 
 EXPOSE 3000
@@ -26,5 +25,4 @@ EXPOSE 3000
 HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
 
-# Container başlarken önce migration'ları (idempotent), sonra sunucuyu çalıştırır
-CMD ["./entrypoint.sh"]
+CMD ["node", "server.js"]

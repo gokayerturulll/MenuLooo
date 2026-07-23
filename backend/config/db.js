@@ -1,4 +1,6 @@
 const { Pool } = require('pg');
+const promClient = require('prom-client');
+const { register } = require('./metrics');
 require('dotenv').config();
 
 const pool = new Pool({
@@ -17,6 +19,27 @@ const pool = new Pool({
 
 pool.on('error', (err) => {
     console.error('[DB] Beklenmeyen bağlantı hatası:', err.message);
+});
+
+// ─── Prometheus: bağlantı havuzu metrikleri ──────────────────────────────────
+// collect() her /metrics isteğinde çalışır, pool'un o anki durumunu okur.
+new promClient.Gauge({
+    name: 'db_pool_total_connections',
+    help: 'Havuzdaki toplam bağlantı sayısı',
+    registers: [register],
+    collect() { this.set(pool.totalCount); },
+});
+new promClient.Gauge({
+    name: 'db_pool_idle_connections',
+    help: 'Havuzda boşta bekleyen bağlantı sayısı',
+    registers: [register],
+    collect() { this.set(pool.idleCount); },
+});
+new promClient.Gauge({
+    name: 'db_pool_waiting_requests',
+    help: 'Bağlantı bekleyen istek sayısı (havuz doluysa artar)',
+    registers: [register],
+    collect() { this.set(pool.waitingCount); },
 });
 
 const connectDB = async () => {

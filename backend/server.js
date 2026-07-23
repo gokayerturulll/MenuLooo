@@ -159,6 +159,15 @@ const io = new Server(httpServer, {
     transports: ['polling', 'websocket'],
 });
 
+// Prometheus: o anki aktif Socket.io bağlantı sayısı (Oda özelliği kullanımı)
+// eslint-disable-next-line no-new
+new (require('prom-client')).Gauge({
+    name: 'socketio_connected_clients',
+    help: 'Aktif Socket.io bağlantı sayısı',
+    registers: [register],
+    collect() { this.set(io.engine.clientsCount); },
+});
+
 // ─── JWT_SECRET güç kontrolü ────────────────────────────────────────────────
 const jwtSecret = process.env.JWT_SECRET || '';
 if (jwtSecret.length < 32) {

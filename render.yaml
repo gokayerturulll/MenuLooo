@@ -6,10 +6,9 @@ services:
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     healthCheckPath: /health
-    # preDeployCommand ücretsiz planda desteklenmiyor — bunun yerine container
-    # her başladığında önce migration'ları (idempotent, zaten uygulananları
-    # atlıyor), sonra sunucuyu çalıştırıyoruz.
-    dockerCommand: sh -c "node migrations/run.js && node server.js"
+    # Migration + sunucu başlatma sırası artık Dockerfile'ın kendi CMD'sinde
+    # (entrypoint.sh) — preDeployCommand ücretsiz planda desteklenmiyor,
+    # dockerCommand'daki "&&" sözdizimi de güvenilir parse edilmiyordu.
     envVars:
       - key: NODE_ENV
         value: production

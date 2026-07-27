@@ -27,11 +27,29 @@ updates:
       - "backend"
 
   # ── Docker base image'ları (node:20-alpine, postgres vb.) ──────────────────
+  #
+  # MAJOR sürüm atlamaları bilinçli olarak kapalı. Sebebi: bu image'ların major
+  # yükseltmesi tek satırlık bir değişiklik DEĞİL, koordineli bir iş gerektiriyor
+  # ve CI bunu yakalayamıyor (docker build image'ı yalnızca KURAR, çalıştırmaz).
+  #
+  # Somut örnek — postgres 16 → 18 denemesi (PR #2) tüm kontrollerden GEÇTİ ama:
+  #   1. db/Dockerfile'da uzantı paketleri "postgresql-16-postgis-3" şeklinde
+  #      sabit yazılı; base image 18 olunca uzantılar 16 klasörüne kuruluyor,
+  #      18 klasörü boş kalıyor → migration'daki CREATE EXTENSION postgis/vector
+  #      başarısız olur, backend hiç açılmaz.
+  #   2. Mevcut postgres_data volume'ü 16 ile oluşturulduğu için 18 onu okuyamaz
+  #      ("database files are incompatible") → veri taşıma planı gerekir.
+  #
+  # Yama/minor güncellemeleri (16.6 → 16.7) açık kalır; onlar güvenli.
+  # Major yükseltme yapılacağı zaman elle ve planlı yapılmalı.
   - package-ecosystem: "docker"
     directory: "/backend"
     schedule:
       interval: "weekly"
       day: "monday"
+    ignore:
+      - dependency-name: "node"
+        update-types: [ "version-update:semver-major" ]
     labels:
       - "dependencies"
       - "docker"
@@ -41,6 +59,9 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    ignore:
+      - dependency-name: "postgres"
+        update-types: [ "version-update:semver-major" ]
     labels:
       - "dependencies"
       - "docker"

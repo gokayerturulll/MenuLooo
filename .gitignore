@@ -32,3 +32,6 @@ MenuLo/Utilities/NgrokURL.swift
 
 # Claude/Agent Workspace Context
 .claude/
+
+# Markdown docs
+*.md

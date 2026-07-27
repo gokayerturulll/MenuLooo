@@ -79,6 +79,20 @@ services:
     ports:
       - "3000:3000"
 
+  # ── cAdvisor (container CPU/RAM/network/disk metrikleri) ─────────────────────
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080" # kendi web arayüzü + /metrics endpoint'i
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - ${HOME}/.docker/run/docker.sock:/var/run/docker.sock:ro # macOS Docker Desktop symlink'i /var/run üzerinden çözülemiyor
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    privileged: true # cgroup/container bilgilerini okuyabilmesi için gerekli
+
   # ── Prometheus ──────────────────────────────────────────────
   prometheus:
     image: prom/prometheus:latest
@@ -90,6 +104,7 @@ services:
       - "127.0.0.1:9091:9090" # host'ta native bir Prometheus 9090'ı kullandığı için 9091'e aldık
     depends_on:
       - backend
+      - cadvisor
 
   # ── Grafana  ─────────────────────────────────────────────────
   grafana:

@@ -1,6 +1,6 @@
 # PostgreSQL 16 + PostGIS + pgvector
 
-FROM postgres:16.6-bookworm
+FROM postgres:18.4-bookworm
 
 # PostGIS ve pgvector kur
 RUN apt-get update \

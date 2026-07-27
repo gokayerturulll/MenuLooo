@@ -156,7 +156,7 @@ async function saveEmbedding(itemId, vector) {
     );
 }
 
-const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const sleep = (ms) => new Promise(r => { setTimeout(r, ms); });
 
 // ----------------------------------------------------------------------------
 // Ana akış
@@ -232,7 +232,8 @@ async function run() {
         process.exit(result.failed > 0 ? 1 : 0);
     } catch (err) {
         console.error('💥 Script hatası:', err);
-        try { await pool.end(); } catch (_) {}
+        // Zaten hata yolundayız; kapatma da başarısız olursa yutulur.
+        try { await pool.end(); } catch { /* yoksay */ }
         process.exit(1);
     }
 })();

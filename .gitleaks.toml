@@ -1,0 +1,22 @@
+# Gitleaks yapılandırması — git geçmişinde sızmış sır (API key, token, şifre) arar.
+#
+# Buradaki izin listesi bilinçli olarak DAR tutuldu: tüm tests/ klasörü muaf
+# tutulsaydı, testlere yanlışlıkla yapıştırılan GERÇEK bir anahtar da gözden
+# kaçardı. Bunun yerine yalnızca bilinen sahte sabitler adıyla muaf tutuluyor.
+
+title = "MenuLo gitleaks config"
+
+[extend]
+useDefault = true   # gitleaks'in varsayılan kural seti (AWS, Google, Stripe, JWT...)
+
+[allowlist]
+description = "Testlerde kullanılan sahte sabitler"
+
+regexes = [
+    # backend/tests/auth.test.js + authMiddleware.test.js — sahte JWT secret'ı.
+    # 32+ karakter şartını sağlamak için uzun, bu yüzden yüksek entropi veriyor.
+    '''test-secret-must-be-at-least-32-chars-long''',
+    '''baska-bir-secret-32-karakterden-uzun''',
+    # backend/tests/menubot.test.js — SDK'lar mock'lu, gerçek anahtar gerekmiyor.
+    '''test-key''',
+]

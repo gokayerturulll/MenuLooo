@@ -25,6 +25,7 @@ Analysis\ Report*.pdf
 node_modules/
 .env
 *.log
+coverage/
 
 # Auto-generated ngrok config
 MenuLo/Utilities/NgrokURL.swift

@@ -1,0 +1,56 @@
+# Dependabot — bağımlılık güncellemelerini otomatik PR olarak açar.
+#
+# npm audit "şu an zafiyetli olanı" yakalar; Dependabot ise güncel kalmayı
+# sağlayarak zafiyet oluşmadan önce önler. İkisi birbirini tamamlar.
+#
+# Haftalık ritim seçildi: günlük PR yağmuru yaratmadan güncel kalmaya yeter.
+
+version: 2
+
+updates:
+  # ── Backend Node.js bağımlılıkları ─────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      # Yama/minor güncellemeleri tek PR'da topla — inceleme yükünü azaltır.
+      # Major sürümler kırıcı olabileceği için ayrı ayrı PR açılır.
+      minor-ve-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    labels:
+      - "dependencies"
+      - "backend"
+
+  # ── Docker base image'ları (node:20-alpine, postgres vb.) ──────────────────
+  - package-ecosystem: "docker"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "docker"
+
+  - package-ecosystem: "docker"
+    directory: "/db"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "docker"
+
+  # ── GitHub Actions sürümleri (actions/checkout@v4 vb.) ─────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "ci"

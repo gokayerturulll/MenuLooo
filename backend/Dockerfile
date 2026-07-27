@@ -4,7 +4,10 @@ FROM node:20-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 
-RUN npm install --omit=dev
+# npm ci (npm install değil): package-lock.json'ı bağlayıcı sayar, yani üretim
+# image'ı CI'da test edilenin BİREBİR aynı sürümlerini kurar. Lock ile package.json
+# uyuşmazsa sessizce farklı sürüm çekmek yerine build'i kırar.
+RUN npm ci --omit=dev
 
 # ── 2. Aşama (runtime): gerçek çalışacak image ────────────────────────────────
 FROM node:20-alpine

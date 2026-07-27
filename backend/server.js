@@ -160,7 +160,6 @@ const io = new Server(httpServer, {
 });
 
 // Prometheus: o anki aktif Socket.io bağlantı sayısı (Oda özelliği kullanımı)
-// eslint-disable-next-line no-new
 new (require('prom-client')).Gauge({
     name: 'socketio_connected_clients',
     help: 'Aktif Socket.io bağlantı sayısı',
@@ -337,6 +336,10 @@ io.on('connection', (socket) => {
                     'SELECT creator_id FROM friend_room WHERE room_id = $1', [room_id]
                 );
                 if (rows.length > 0) {
+                    // Eşzamanlı iki join aynı anda buraya girebilir; ikisi de aynı
+                    // odanın DB'den gelen creator_id'sini yazar → yarış zararsız,
+                    // en kötü ihtimalle bir fazla sorgu atılır.
+                    // eslint-disable-next-line require-atomic-updates
                     roomHosts[room_id] = { creatorId: rows[0].creator_id, cachedAt: Date.now() };
                 }
             } catch (err) {
@@ -446,6 +449,9 @@ io.on('connection', (socket) => {
                 );
                 if (rows.length > 0) {
                     hostEntry = { creatorId: rows[0].creator_id, cachedAt: Date.now() };
+                    // Yukarıdakiyle aynı gerekçe: yazılan değer DB kaynaklı ve
+                    // eşzamanlı yazmalar birbirinin aynısı.
+                    // eslint-disable-next-line require-atomic-updates
                     roomHosts[room_id] = hostEntry;
                 }
             } catch (err) {
@@ -577,7 +583,7 @@ io.on('connection', (socket) => {
 });
 
 // ─── Global hata yakalayıcılar ───────────────────────────────────────────────
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason, _promise) => {
     console.error('[unhandledRejection]', reason);
     // Prod'da burada Sentry/Datadog'a log atılabilir
 });

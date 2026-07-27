@@ -59,7 +59,9 @@ async function run() {
         count++;
       } catch (err) {
         await client.query('ROLLBACK');
-        throw new Error(`❌ Failed on ${file}: ${err.message}`);
+        // cause: orijinal hatanın stack'i kaybolmasın — migration hatalarını
+        // teşhis ederken asıl SQL hatası gerekiyor.
+        throw new Error(`❌ Failed on ${file}: ${err.message}`, { cause: err });
       }
     }
 

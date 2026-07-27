@@ -22,6 +22,7 @@
 // ============================================================================
 
 const pool = require('../config/db');
+const { menubotIntentTotal } = require('../config/metrics');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const Groq = require('groq-sdk');
 
@@ -40,6 +41,8 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || '' });
 
 function sanitizeForPrompt(text) {
     return text
+        // Kontrol karakterleri prompt injection için kasıtlı olarak temizleniyor.
+        // eslint-disable-next-line no-control-regex
         .replace(/[\x00-\x1F\x7F]/g, ' ')
         .replace(/"/g, '\\"')
         .replace(/`/g, "'");
@@ -221,10 +224,12 @@ async function classifyIntent(message) {
         }
 
         console.log(`[Intent] "${message}" → ${result.intent}${result.district ? ` (${result.district})` : ''}`);
+        menubotIntentTotal.labels(result.intent).inc();
         return result;
 
     } catch (err) {
         logAIError('intent-classifier (fail-open)', err);
+        menubotIntentTotal.labels('food').inc();
         return { intent: 'food', district: null };
     }
 }

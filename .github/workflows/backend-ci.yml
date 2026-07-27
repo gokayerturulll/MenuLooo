@@ -30,11 +30,78 @@ jobs:
           cache-dependency-path: backend/package-lock.json
 
       - run: npm ci
-      - run: npm test
+
+      # Coverage eşiği jest.config.js'te tanımlı — altına düşerse bu adım kırılır.
+      - run: npm run test:coverage
+
+      - name: Coverage raporunu sakla
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: backend/coverage/lcov-report/
+          retention-days: 7
+
+  # test ile PARALEL çalışır — lint hatası testlerin sonucunu gizlemesin diye
+  # aynı job'a step olarak eklenmedi.
+  lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+
+  # Bilinen zafiyetli bağımlılıkları yakalar.
+  #   --omit=dev    : jest/eslint gibi araçların zafiyetleri üretim image'ına
+  #                   GİRMEZ (Dockerfile --omit=dev ile kuruyor) ve çoğu ancak
+  #                   aracı eski sürüme almakla "düzeliyor" → CI'ı kırmasınlar.
+  #   --audit-level : sadece high/critical bloklar; moderate uyarıları PR'ı durdurmaz.
+  audit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Üretim bağımlılıklarında bilinen zafiyet var mı
+        run: npm audit --omit=dev --audit-level=high
+
+  # Git GEÇMİŞİNDE sızmış sır (API key, token, şifre) arar.
+  # Yanlış pozitifler .gitleaks.toml içinde dar kapsamlı olarak muaf tutulur.
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # ZORUNLU: varsayılan sığ klonda geçmiş taranamaz
+
+      - name: Gitleaks ile sır taraması
+        run: |
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest \
+            detect --source=/repo --config=/repo/.gitleaks.toml \
+            --redact --no-banner
 
   docker-build:
     runs-on: ubuntu-latest
-    needs: test
+    needs: [ test, lint, audit, secret-scan ]
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@v4
 
@@ -44,7 +111,44 @@ jobs:
       - name: DB image build edilebiliyor mu
         run: docker build -t menulo-db:ci ./db
 
-  push-to-dockerhub:
+      # RAPOR AMAÇLI (exit-code 0) — bilinçli tercih:
+      # Bulguların çoğu node:20-alpine base image'ının ve içindeki npm'in kendi
+      # bağımlılıklarından geliyor; bu repodan düzeltilemezler. Bunlara kapı
+      # koymak CI'ı kalıcı kırmızıya çevirir ve tarama görmezden gelinmeye başlar.
+      # Uygulamanın KENDİ bağımlılıklarını zaten `audit` job'ı bloklayarak koruyor.
+      # Base image güncellendikçe buradaki liste kısalmalı; sıfırlandığında
+      # --exit-code 1 eklenip gerçek kapıya dönüştürülebilir.
+      - name: Trivy ile image zafiyet taraması (rapor)
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$PWD:/out" \
+            aquasec/trivy:latest image \
+              --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed \
+              --no-progress --exit-code 0 \
+              --format sarif -o /out/trivy-results.sarif \
+              menulo-backend:ci
+
+      - name: Trivy sonuçlarını log'da göster
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:latest image \
+              --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed \
+              --no-progress --exit-code 0 \
+              menulo-backend:ci
+
+      # Security sekmesine yükler. Private repo + Advanced Security yoksa bu adım
+      # başarısız olabilir; taramanın kendisi log'da zaten görünür olduğu için
+      # continue-on-error ile CI'ı kırmasına izin verilmiyor.
+      - name: SARIF sonucunu Security sekmesine yükle
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+
+  push-backend-to-dockerhub:
     runs-on: ubuntu-latest
     needs: docker-build
     if: github.ref == 'refs/heads/main'

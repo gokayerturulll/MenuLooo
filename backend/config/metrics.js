@@ -20,4 +20,11 @@ const httpRequestTotal = new client.Counter({
     registers: [register],
 });
 
-module.exports = { register, httpRequestDuration, httpRequestTotal };
+const menubotIntentTotal = new client.Counter({
+    name: 'menubot_intent_total',
+    help: 'MenuBot intent sınıflandırma sonuçları',
+    labelNames: ['intent'],
+    registers: [register],
+});
+
+module.exports = { register, httpRequestDuration, httpRequestTotal, menubotIntentTotal };

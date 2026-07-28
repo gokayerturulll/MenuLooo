@@ -24,10 +24,10 @@ module.exports = {
     // Kapsam arttıkça bu değerler yukarı çekilmeli.
     coverageThreshold: {
         global: {
-            statements: 60,
-            branches:   58,
-            functions:  58,
-            lines:      60,
+            statements: 72,
+            branches:   69,
+            functions:  72,
+            lines:      73,
         },
     },
 

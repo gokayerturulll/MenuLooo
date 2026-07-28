@@ -193,35 +193,50 @@ jobs:
       # Uygulamanın KENDİ bağımlılıklarını zaten `audit` job'ı bloklayarak koruyor.
       # Base image güncellendikçe buradaki liste kısalmalı; sıfırlandığında
       # --exit-code 1 eklenip gerçek kapıya dönüştürülebilir.
-      - name: Trivy ile image zafiyet taraması (rapor)
+      # Eskiden aynı tarama İKİ KEZ koşuyordu: biri SARIF dosyası üretmek, diğeri
+      # log'a okunur tablo basmak için. Trivy her koşuda zafiyet veritabanını
+      # yeniden indirdiği için bu ciddi israftı.
+      #
+      # Artık tek tarama JSON ara formatına yazılıyor, `trivy convert` ile aynı
+      # sonuçtan iki çıktı üretiliyor. convert tarama YAPMAZ, sadece biçim
+      # değiştirir — veritabanı indirmesi yok, anlık.
+      #
+      # Ayrıca menulo-db de kapsama girdi. Eskiden yalnızca backend taranıyordu,
+      # oysa db image'ı da Docker Hub'a push ediliyor; taranmadan yayınlanıyordu.
+      - name: Trivy ile image zafiyet taraması
         run: |
-          docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            -v "$PWD:/out" \
-            aquasec/trivy:latest image \
-              --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed \
-              --no-progress --exit-code 0 \
-              --format sarif -o /out/trivy-results.sarif \
-              menulo-backend:ci
+          set -euo pipefail
+          mkdir -p trivy
+          for name in backend db; do
+            echo "════════ menulo-$name taranıyor ════════"
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v "$PWD/trivy:/out" \
+              aquasec/trivy:latest image \
+                --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed \
+                --no-progress --exit-code 0 \
+                --format json -o "/out/$name.json" \
+                "menulo-$name:ci"
 
-      - name: Trivy sonuçlarını log'da göster
-        run: |
-          docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            aquasec/trivy:latest image \
-              --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed \
-              --no-progress --exit-code 0 \
-              menulo-backend:ci
+            # Aynı taramadan iki çıktı: log için tablo, Security sekmesi için SARIF.
+            docker run --rm -v "$PWD/trivy:/out" aquasec/trivy:latest \
+              convert --format table "/out/$name.json"
+            docker run --rm -v "$PWD/trivy:/out" aquasec/trivy:latest \
+              convert --format sarif -o "/out/$name.sarif" "/out/$name.json"
+          done
 
-      # Security sekmesine yükler. Private repo + Advanced Security yoksa bu adım
-      # başarısız olabilir; taramanın kendisi log'da zaten görünür olduğu için
-      # continue-on-error ile CI'ı kırmasına izin verilmiyor.
-      - name: SARIF sonucunu Security sekmesine yükle
+      # Security sekmesine yükler. sarif_file bir KLASÖR alabiliyor; içindeki
+      # tüm .sarif dosyaları yüklenir, yani backend ve db ayrı ayrı raporlanır.
+      #
+      # Private repo + Advanced Security yoksa bu adım başarısız olabilir;
+      # taramanın kendisi log'da zaten görünür olduğu için continue-on-error ile
+      # CI'ı kırmasına izin verilmiyor.
+      - name: SARIF sonuçlarını Security sekmesine yükle
         if: always()
         continue-on-error: true
         uses: github/codeql-action/upload-sarif@v4
         with:
-          sarif_file: trivy-results.sarif
+          sarif_file: trivy
 
       # ── Push, build ve tarama ile AYNI job içinde ────────────────────────────
       # Eskiden push ayrı bir job'da sıfırdan yeniden build ediyordu. Bu, taranan

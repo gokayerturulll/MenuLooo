@@ -31,8 +31,8 @@ coverage/
 MenuLo/Utilities/NgrokURL.swift
 *NgrokURL 2.swift
 
-# Claude/Agent Workspace Context
-.claude/
-
-# Markdown docs
+# Markdown docs (çalışma notları repoya girmesin)
 *.md
+# ...ama projeyi anlatan dosyalar istisna:
+!README.md
+!docs/**/*.md

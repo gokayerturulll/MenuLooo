@@ -56,8 +56,34 @@ jobs:
       - name: XcodeGen kur
         run: brew install xcodegen
 
+      # SIRALAMA ÖNEMLİ — bu adım xcodegen'den ÖNCE olmak zorunda.
+      #
+      # MenuLo/Utilities/NgrokURL.swift .gitignore'da; temiz bir klonda YOK.
+      # Onu üreten fetch_ngrok_url.sh normalde bir Xcode preBuildScript, yani
+      # build SIRASINDA çalışıyor. Ama xcodegen kaynak dosyalarını ÜRETİM ANINDA
+      # tarayıp projeye ekliyor — o an dosya yoksa hedefe hiç girmiyor ve
+      # Constants.swift'teki NgrokConfig.baseURL derlenemiyor.
+      #
+      # Senin makinende sorun çıkmıyor çünkü dosya önceki build'lerden kalma
+      # zaten duruyor. Temiz klonda (CI, yeni geliştirici) proje derlenmiyordu;
+      # bu adım o boşluğu kapatıyor. Script ngrok bulamayınca localhost'a düşüp
+      # sıfır kodla çıkıyor, CI'da sorun değil.
+      - name: Ngrok config dosyasını üret (xcodegen'den ÖNCE)
+        run: SRCROOT="$PWD" ./scripts/fetch_ngrok_url.sh
+
       - name: Xcode projesini üret
         run: xcodegen generate
+
+      # Üretilen projede dosya gerçekten var mı — yoksa hata derleme aşamasında
+      # anlaşılmaz bir "cannot find in scope" olarak çıkıyor. Burada erken ve
+      # net patlasın.
+      - name: NgrokURL.swift projeye girdi mi
+        run: |
+          test -f MenuLo/Utilities/NgrokURL.swift \
+            || { echo "HATA: NgrokURL.swift üretilmemiş"; exit 1; }
+          grep -q "NgrokURL.swift" MenuLo.xcodeproj/project.pbxproj \
+            || { echo "HATA: NgrokURL.swift Xcode hedefine eklenmemiş"; exit 1; }
+          echo "✅ NgrokURL.swift üretildi ve hedefe eklendi"
 
       # SocketIO paketi project.yml'da tanımlı. Ayrı adımda çözmek, ağ kaynaklı
       # bir hatanın "test başarısız" gibi görünmesini engelliyor — hata burada,

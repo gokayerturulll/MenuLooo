@@ -1,22 +1,26 @@
 name: Backend CI
 
+# DİKKAT — buraya `paths:` filtresi EKLEMEYİN.
+#
+# Bu workflow'un job'ları main'de "required status check" olarak işaretli.
+# paths filtresi eşleşmediğinde job hiç BAŞLAMAZ; başlamayan bir check ise
+# "başarısız" değil "beklemede" sayılır. Sonuç: sadece README değiştiren bir PR
+# sonsuza kadar merge edilemez, çünkü beklenen check hiç gelmez.
+#
+# Filtreyi geri istersen önce required check listesinden çıkarman gerekir:
+#   gh api repos/:owner/:repo/branches/main/protection/required_status_checks
 on:
   push:
     branches: [ main ]
-    paths:
-      - 'backend/**'
-      - 'db/**'
-      - 'docker-compose*.yml'
-      - 'scripts/smoke_test.sh'
-      - '.github/workflows/backend-ci.yml'
   pull_request:
     branches: [ main ]
-    paths:
-      - 'backend/**'
-      - 'db/**'
-      - 'docker-compose*.yml'
-      - 'scripts/smoke_test.sh'
-      - '.github/workflows/backend-ci.yml'
+
+# Aynı PR'a arka arkaya push atınca eski koşuyu iptal et — runner dakikası ve
+# sıra beklemesi boşa gitmesin. main'de iptal YOK (cancel-in-progress false):
+# oradaki her commit'in kendi image'ı build edilip push edilmeli.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:

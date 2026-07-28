@@ -1,25 +1,58 @@
 name: Backend CI
 
+# DİKKAT — buraya `paths:` filtresi EKLEMEYİN. Filtreleme aşağıda, `changes`
+# job'ı + `if:` koşullarıyla yapılıyor. Aradaki fark kritik:
+#
+#   on: paths ile atlanan iş  → workflow HİÇ TETİKLENMEZ → check hiç doğmaz →
+#                               required check sonsuza kadar "beklemede" kalır →
+#                               PR asla merge edilemez.
+#   if: ile atlanan job       → job "skipped" olarak RAPORLANIR → GitHub bunu
+#                               required check için BAŞARILI sayar → PR merge olur.
+#
+# Yani tasarruf aynı, kilitlenme yok. Bu yüzden filtre `on:` seviyesinde değil.
 on:
   push:
     branches: [ main ]
-    paths:
-      - 'backend/**'
-      - 'db/**'
-      - 'docker-compose*.yml'
-      - 'scripts/smoke_test.sh'
-      - '.github/workflows/backend-ci.yml'
   pull_request:
     branches: [ main ]
-    paths:
-      - 'backend/**'
-      - 'db/**'
-      - 'docker-compose*.yml'
-      - 'scripts/smoke_test.sh'
-      - '.github/workflows/backend-ci.yml'
+
+# Aynı PR'a arka arkaya push atınca eski koşuyu iptal et — runner dakikası ve
+# sıra beklemesi boşa gitmesin. main'de iptal YOK (cancel-in-progress false):
+# oradaki her commit'in kendi image'ı build edilip push edilmeli.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Bu commit backend'e dokunuyor mu? Aşağıdaki ağır job'lar buna bakarak
+  # kendini atlıyor. Sadece README ya da iOS tarafı (MenuLo/, MenuLo.xcodeproj)
+  # değiştiğinde docker build + smoke test koşturmanın anlamı yok.
+  #
+  # Bu job'ın kendisi saniyeler sürer ve HER ZAMAN koşar — çünkü diğerlerinin
+  # "atlandı" kararını verebilmesi için birinin bakması lazım.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filtre.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # PR'da base branch'e karşı, push'ta bir önceki commit'e karşı karşılaştırır.
+      # İki durumu da doğru ele aldığı için elle `git diff` yazmak yerine bu action.
+      - uses: dorny/paths-filter@v3
+        id: filtre
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - 'db/**'
+              - 'docker-compose*.yml'
+              - 'scripts/smoke_test.sh'
+              - '.github/workflows/backend-ci.yml'
+
   test:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -49,6 +82,8 @@ jobs:
   # test ile PARALEL çalışır — lint hatası testlerin sonucunu gizlemesin diye
   # aynı job'a step olarak eklenmedi.
   lint:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -71,6 +106,8 @@ jobs:
   #                   aracı eski sürüme almakla "düzeliyor" → CI'ı kırmasınlar.
   #   --audit-level : sadece high/critical bloklar; moderate uyarıları PR'ı durdurmaz.
   audit:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -87,6 +124,11 @@ jobs:
 
   # Git GEÇMİŞİNDE sızmış sır (API key, token, şifre) arar.
   # Yanlış pozitifler .gitleaks.toml içinde dar kapsamlı olarak muaf tutulur.
+  #
+  # BİLEREK `if:` KOŞULU YOK — bu job her commit'te koşar. Sır her yere sızabilir:
+  # README'ye yapıştırılan bir örnek token, iOS tarafındaki bir Info.plist, bir
+  # .env kopyası... "backend değişmedi" bunun taranmamasının gerekçesi olamaz.
+  # Zaten saniyeler sürüyor, tasarruf edilecek bir maliyeti de yok.
   secret-scan:
     runs-on: ubuntu-latest
     steps:
@@ -110,6 +152,8 @@ jobs:
   #
   # Detaylar ve kontrol listesi: scripts/smoke_test.sh
   integration:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -124,6 +168,11 @@ jobs:
   docker-build:
     runs-on: ubuntu-latest
     # integration da kapıda: ayağa kalkmayan bir image Docker Hub'a çıkmasın.
+    #
+    # Ayrıca `if:` yazmaya gerek yok: needs listesindeki job'lar atlandığında
+    # GitHub bu job'ı da otomatik atlar. Yani backend'e dokunmayan bir commit'te
+    # burası da kendiliğinden devre dışı kalıyor — ki doğrusu da bu, image
+    # değişmediyse yeniden yayınlanmasının anlamı yok.
     needs: [ test, lint, audit, secret-scan, integration ]
     permissions:
       contents: read

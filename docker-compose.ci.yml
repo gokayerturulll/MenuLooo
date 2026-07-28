@@ -1,0 +1,47 @@
+# CI smoke test override — docker-compose.yml ile BİRLİKTE kullanılır:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build backend
+#
+# Amaç: CI'ın "image build ediliyor mu?" sorusunun ötesine geçip "bu image
+# gerçekten AYAĞA KALKIYOR mu?" sorusunu yanıtlamak. docker build yalnızca
+# imajı kurar; postgres 16→18 denemesinin (PR #2) tüm kontrollerden geçip yine
+# de çalışmayacak olmasının sebebi tam olarak buydu.
+#
+# Burada ayağa kalkan zincir: db → migrate → backend
+# (cadvisor/prometheus/grafana başlatılmaz — `up backend` yalnızca backend'in
+#  depends_on zincirini çeker; cadvisor'ın privileged + macOS'a özel socket
+#  mount'u zaten Linux runner'da çalışmaz.)
+
+services:
+
+  # CI'da .env yok; migrate DB değişkenlerini zaten base compose'dan alıyor.
+  migrate:
+    restart: "no"
+
+  # Gemini API çağrısı yapılamaz (ve yapılmamalı — CI'da ücretli dış servis
+  # çağrısı istemiyoruz). Servis yine de "başarıyla tamamlandı" durumuna geçmeli,
+  # yoksa backend'in depends_on koşulu hiç sağlanmaz.
+  #
+  # Bu, embedding'lerin doğruluğunu test etmez — ama etmesi de gerekmiyor:
+  # pgvector/PostGIS uzantılarının gerçekten kurulu ve kullanılabilir olduğunu
+  # 001_initial_schema.sql'deki CREATE EXTENSION + HNSW index zaten migrate
+  # adımında kanıtlıyor.
+  seed-embeddings:
+    command: [ "node", "-e", "console.log('CI: embedding seed adımı atlandı.')" ]
+
+  backend:
+    # CI'da yeniden başlatma kapalı: çöken container sessizce ayağa kalkıp
+    # hatayı gizlemesin, testi kırsın.
+    restart: "no"
+    # !override → base compose'daki port listesinin ÜSTÜNE eklenmez, onun YERİNE
+    # geçer. Smoke test'i 3010'dan sürmek, geliştirme ortamında 3000'de zaten
+    # çalışan bir backend varken de testi çalıştırabilmeyi sağlar.
+    ports: !override
+      - "3010:3000"
+    environment:
+      # Üretimde çalışacak yolu test ediyoruz — production'a özel açılış
+      # kontrolleri (ALLOWED_ORIGINS zorunluluğu, trust proxy) de kapsama girsin.
+      NODE_ENV: production
+      ALLOWED_ORIGINS: http://localhost:3000
+      # Sadece CI içindir; server.js en az 32 karakter şartı koyuyor.
+      JWT_SECRET: ci-smoke-test-jwt-secret-32-characters-minimum

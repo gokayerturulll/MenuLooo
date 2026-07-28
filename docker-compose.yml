@@ -25,8 +25,11 @@ services:
     depends_on:
       db:
         condition: service_healthy # DB tam hazır olmadan başlama
+    # required: false → repoyu yeni klonlayan biri (ve CI) .env dosyası olmadan da
+    # compose'u ayağa kaldırabilir. Dosya varsa davranış eskisiyle birebir aynı.
     env_file:
-      - ./backend/.env
+      - path: ./backend/.env
+        required: false
     environment:
       DB_HOST: db
       DB_PORT: 5432
@@ -45,7 +48,8 @@ services:
       migrate:
         condition: service_completed_successfully
     env_file:
-      - ./backend/.env
+      - path: ./backend/.env
+        required: false
     environment:
       DB_HOST: db
       DB_PORT: 5432
@@ -67,7 +71,8 @@ services:
       seed-embeddings:
         condition: service_completed_successfully # embedding'ler hazır olmadan başlama
     env_file:
-      - ./backend/.env
+      - path: ./backend/.env
+        required: false
     environment:
       # Docker içinde bu değerler .env'i override eder
       NODE_ENV: ${NODE_ENV:-development}

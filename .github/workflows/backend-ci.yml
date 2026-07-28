@@ -6,12 +6,16 @@ on:
     paths:
       - 'backend/**'
       - 'db/**'
+      - 'docker-compose*.yml'
+      - 'scripts/smoke_test.sh'
       - '.github/workflows/backend-ci.yml'
   pull_request:
     branches: [ main ]
     paths:
       - 'backend/**'
       - 'db/**'
+      - 'docker-compose*.yml'
+      - 'scripts/smoke_test.sh'
       - '.github/workflows/backend-ci.yml'
 
 jobs:
@@ -96,9 +100,31 @@ jobs:
             detect --source=/repo --config=/repo/.gitleaks.toml \
             --redact --no-banner
 
+  # Birim testler kodu, bu job SİSTEMİ doğrular: db → migrate → backend zinciri
+  # gerçekten ayağa kalkıyor mu?
+  #
+  # Neden gerekli: `docker build` image'ı yalnızca KURAR, çalıştırmaz. postgres
+  # 16 → 18 denemesi (PR #2) tam olarak bu yüzden tüm kontrollerden geçmişti;
+  # uzantılar 16 klasörüne kurulduğu için migration'daki CREATE EXTENSION
+  # çalışma anında patlıyordu, build anında değil.
+  #
+  # Detaylar ve kontrol listesi: scripts/smoke_test.sh
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # env_file "required: false" ve "!override" merge etiketi Compose 2.24+ ister.
+      # Sürümü log'a basmak, runner imajı eskirse teşhisi kolaylaştırır.
+      - run: docker compose version
+
+      - name: Smoke test — servisler gerçekten ayağa kalkıyor mu
+        run: ./scripts/smoke_test.sh
+
   docker-build:
     runs-on: ubuntu-latest
-    needs: [ test, lint, audit, secret-scan ]
+    # integration da kapıda: ayağa kalkmayan bir image Docker Hub'a çıkmasın.
+    needs: [ test, lint, audit, secret-scan, integration ]
     permissions:
       contents: read
       security-events: write
@@ -148,40 +174,55 @@ jobs:
         with:
           sarif_file: trivy-results.sarif
 
-  push-backend-to-dockerhub:
-    runs-on: ubuntu-latest
-    needs: docker-build
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v7
-
+      # ── Push, build ve tarama ile AYNI job içinde ────────────────────────────
+      # Eskiden push ayrı bir job'da sıfırdan yeniden build ediyordu. Bu, taranan
+      # image ile yayınlanan image'ın FARKLI olması demekti: node:20-alpine
+      # değişebilir bir etiket olduğu için iki build farklı içerik üretebilir.
+      # Burada `docker tag` yalnızca yeni bir isim takar — katmanlar ve dolayısıyla
+      # digest aynı kalır, yani Trivy'nin taradığı image'ın ta kendisi push edilir.
       - name: Docker Hub'a giriş yap
+        if: github.ref == 'refs/heads/main'
         uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Backend image'ı build et ve etiketle
-        run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/menulo-backend:latest ./backend
+      # :latest'e ek olarak :sha-<commit> — geri dönülebilirlik için şart.
+      # Yalnızca :latest varken "dün çalışan sürüme dön" mümkün değil, çünkü
+      # dünkü image'ın üstüne yazılmış olur.
+      - name: Taranan image'ları etiketle ve push et
+        if: github.ref == 'refs/heads/main'
+        env:
+          DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+        run: |
+          set -euo pipefail
+          SHA_TAG="sha-${GITHUB_SHA::7}"
+          for name in backend db; do
+            for tag in latest "$SHA_TAG"; do
+              docker tag "menulo-$name:ci" "$DOCKERHUB_USER/menulo-$name:$tag"
+              docker push "$DOCKERHUB_USER/menulo-$name:$tag"
+            done
+          done
+          echo "Yayınlanan etiketler: latest, $SHA_TAG"
 
-      - name: Push et
-        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/menulo-backend:latest
-
-  push-db-to-dockerhub:
-    runs-on: ubuntu-latest
-    needs: docker-build
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Docker Hub'a giriş yap
-        uses: docker/login-action@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: DB image'ı build et ve etiketle
-        run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/menulo-db:latest ./db
-
-      - name: Push et
-        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/menulo-db:latest
+      # Yalnızca raporlama: hangi digest'in yayınlandığı iş özetinde görünsün ki
+      # geri dönüş gerektiğinde hedef sabit olsun. Push başarılıyken salt bilgi
+      # amaçlı bir adım job'ı kırmızıya çevirmesin diye continue-on-error.
+      - name: Yayınlanan digest'leri özetle
+        if: github.ref == 'refs/heads/main'
+        continue-on-error: true
+        env:
+          DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+        run: |
+          {
+            echo "### Docker Hub'a yayınlandı"
+            echo ""
+            echo "| Image | Etiketler | Digest |"
+            echo "| --- | --- | --- |"
+            for name in backend db; do
+              digest=$(docker inspect \
+                --format '{{if .RepoDigests}}{{index .RepoDigests 0}}{{end}}' \
+                "$DOCKERHUB_USER/menulo-$name:latest" 2>/dev/null | cut -d@ -f2)
+              echo "| menulo-$name | \`latest\`, \`sha-${GITHUB_SHA::7}\` | \`${digest:-alınamadı}\` |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"

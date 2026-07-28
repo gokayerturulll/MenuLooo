@@ -1,0 +1,102 @@
+name: iOS CI
+
+# Backend CI ile AYNI mantık, ayrı dosya: iOS build'i macOS runner ister ve
+# macOS runner'lar Linux'a göre çok daha yavaş başlar. Ayrı workflow olunca
+# backend'e dokunan bir PR bu dosyayı hiç beklemez.
+#
+# DİKKAT — buraya `paths:` filtresi EKLEMEYİN. Gerekçesi backend-ci.yml'ın
+# başında uzun uzun yazıyor: on: paths ile atlanan iş check hiç üretmez ve
+# required status check sonsuza kadar beklemede kalır. Filtreleme aşağıda,
+# `ios-changes` job'ı + `if:` koşullarıyla yapılıyor.
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Job adları backend-ci.yml'dakilerle ÇAKIŞMAMALI. Required status check'ler
+  # isimle eşleşiyor; iki workflow'da da "test" adında job olsaydı GitHub
+  # hangisini beklediğini ayırt edemezdi. Bu yüzden "ios-" öneki.
+  ios-changes:
+    # Bu job sadece dosya listesine bakıyor — macOS runner'a gerek yok,
+    # ucuz Linux runner'da koşuyor.
+    runs-on: ubuntu-latest
+    outputs:
+      ios: ${{ steps.filtre.outputs.ios }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dorny/paths-filter@v3
+        id: filtre
+        with:
+          filters: |
+            ios:
+              - 'MenuLo/**'
+              - 'MenuLoTests/**'
+              - 'project.yml'
+              - 'scripts/fetch_ngrok_url.sh'
+              - '.github/workflows/ios-ci.yml'
+
+  ios-test:
+    needs: ios-changes
+    if: needs.ios-changes.outputs.ios == 'true'
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+
+      # MenuLo.xcodeproj .gitignore'da (*.xcodeproj/) — repoda YOK, project.yml'dan
+      # üretiliyor. Bu yüzden CI'ın ilk işi projeyi oluşturmak.
+      # Yan fayda: project.yml ile üretilen proje arasında sürüklenme olursa
+      # burada ortaya çıkar; senin makinendeki eski .xcodeproj testi kurtaramaz.
+      - name: XcodeGen kur
+        run: brew install xcodegen
+
+      - name: Xcode projesini üret
+        run: xcodegen generate
+
+      # SocketIO paketi project.yml'da tanımlı. Ayrı adımda çözmek, ağ kaynaklı
+      # bir hatanın "test başarısız" gibi görünmesini engelliyor — hata burada,
+      # kendi adımında patlar.
+      - name: Swift Package bağımlılıklarını çöz
+        run: xcodebuild -resolvePackageDependencies -project MenuLo.xcodeproj -scheme MenuLo
+
+      # Simülatör adı runner imajı güncellendikçe değişiyor ("iPhone 15" bir gün
+      # kayboluyor). Sabit isim yazmak yerine o an MEVCUT olan en yeni iPhone
+      # simülatörünü seçiyoruz — imaj değişince workflow kendi kendine uyum sağlar.
+      - name: Simülatör seç
+        id: sim
+        run: |
+          set -euo pipefail
+          echo "── Mevcut iPhone simülatörleri ──"
+          xcrun simctl list devices available | grep iPhone || true
+          SECILEN=$(xcrun simctl list devices available -j | jq -r '[.devices | to_entries[] | select(.key | test("iOS")) | .value[] | select(.isAvailable and (.name | test("iPhone")))] | last | "\(.udid) \(.name)"')
+          if [ -z "$SECILEN" ] || [ "$SECILEN" = "null" ]; then
+            echo "HATA: kullanılabilir iPhone simülatörü bulunamadı"; exit 1
+          fi
+          echo "Seçilen: $SECILEN"
+          echo "udid=${SECILEN%% *}" >> "$GITHUB_OUTPUT"
+
+      # CODE_SIGNING_* = NO: CI'da Apple sertifikası yok ve simülatör testi için
+      # gerekmiyor. project.yml'da DEVELOPMENT_TEAM boş olduğu için bunlar
+      # verilmezse build imzalama adımında patlar.
+      #
+      # pipefail + koşullu xcpretty: xcpretty çıktıyı okunur kılıyor ama runner
+      # imajında bulunmayabilir; yoksa ham çıktıya düşüyoruz. pipefail olmadan
+      # xcodebuild'in hata kodu xcpretty'nin başarısı tarafından yutulurdu.
+      - name: Testleri çalıştır
+        run: |
+          set -o pipefail
+          if command -v xcpretty >/dev/null 2>&1; then FORMATTER=xcpretty; else FORMATTER=cat; fi
+          xcodebuild test \
+            -project MenuLo.xcodeproj \
+            -scheme MenuLo \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            | $FORMATTER

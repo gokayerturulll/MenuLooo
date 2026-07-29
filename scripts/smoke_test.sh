@@ -12,8 +12,15 @@
 #   6. Tanımsız endpoint 404 dönüyor (Express router ayakta)
 #
 # Kullanım:
-#   ./scripts/smoke_test.sh              # ayağa kaldır, test et, temizle
-#   KEEP_UP=1 ./scripts/smoke_test.sh    # test sonrası container'ları açık bırak
+#   ./scripts/smoke_test.sh                # build et, ayağa kaldır, test et, temizle
+#   KEEP_UP=1 ./scripts/smoke_test.sh      # test sonrası container'ları açık bırak
+#   SKIP_BUILD=1 ./scripts/smoke_test.sh   # image'lar hazır, yeniden build etme
+#
+# SKIP_BUILD, CI'ın kullandığı yol. Workflow menulo-backend:ci ve menulo-db:ci
+# image'larını zaten build etmiş oluyor; docker-compose.ci.yml da servisleri o
+# etiketlere bağlıyor. Böylece smoke test'in doğruladığı image ile Trivy'nin
+# tarayıp Docker Hub'a push ettiği image aynı digest oluyor. Bayrak olmadan
+# compose ikinci kez build ederdi ve iki build farklı içerik üretebilirdi.
 #
 # Not: kendi geliştirme ortamınla çakışmasın diye ayrı bir compose projesi
 # (menulo-ci) ve dolayısıyla AYRI volume'ler kullanır — mevcut menulo_postgres_data
@@ -50,8 +57,24 @@ trap cleanup EXIT
 # `up backend` yalnızca backend'in depends_on zincirini çeker: db → migrate →
 # seed-embeddings → backend. --wait, backend HEALTHCHECK'i geçene kadar bekler;
 # migrate çökerse ya da backend healthy olamazsa bu komut sıfırdan farklı döner.
+#
+# SKIP_BUILD verildiğinde --build düşürülür: compose, docker-compose.ci.yml'deki
+# `image:` etiketlerine bakıp hazır image'ları kullanır. Image gerçekten yoksa
+# compose yine de build eder (build: tanımı duruyor), yani bayrak yanlışlıkla
+# verilirse test sessizce yanlış şeyi ölçmez, sadece yavaşlar.
+#
+# Bayraklar tek bir dizide toplanıyor ve dizi HİÇBİR ZAMAN boş kalmıyor: `set -u`
+# altında boş bir dizinin "${dizi[@]}" ile genişletilmesi bash 4.4'ten eskisinde
+# (macOS'un varsayılan bash 3.2'si dahil) "unbound variable" hatası veriyor.
+UP_ARGS=(-d --wait --wait-timeout 180)
+if [ -n "${SKIP_BUILD:-}" ]; then
+  echo "ℹ️  SKIP_BUILD: hazır image'lar kullanılıyor (menulo-backend:ci, menulo-db:ci)"
+else
+  UP_ARGS+=(--build)
+fi
+
 echo "🚀 Servisler ayağa kaldırılıyor (proje: $PROJECT)"
-"${COMPOSE[@]}" up -d --build --wait --wait-timeout 180 backend
+"${COMPOSE[@]}" up "${UP_ARGS[@]}" backend
 
 echo ""
 echo "🔍 Kontroller"

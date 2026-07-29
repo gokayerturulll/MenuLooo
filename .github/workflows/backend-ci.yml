@@ -16,6 +16,13 @@ on:
   pull_request:
     branches: [ main ]
 
+# En az yetki: tanımlanmazsa GITHUB_TOKEN'ın yetkisi repo ayarından gelir ve
+# çoğu repoda bu "read and write all"dur. Job'ların neredeyse hiçbirinin repoya
+# YAZMA yetkisine ihtiyacı yok; ihtiyacı olan (docker-build → security-events)
+# kendi bloğunda genişletiyor.
+permissions:
+  contents: read
+
 # Aynı PR'a arka arkaya push atınca eski koşuyu iptal et — runner dakikası ve
 # sıra beklemesi boşa gitmesin. main'de iptal YOK (cancel-in-progress false):
 # oradaki her commit'in kendi image'ı build edilip push edilmeli.
@@ -23,6 +30,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# HER JOB'DA `timeout-minutes` VAR — bunu silmeyin. GitHub'ın varsayılanı 360
+# dakika: asılan bir job (cevap vermeyen bir pull, bitmeyen bir --wait) altı saat
+# runner yakar ve bunu ancak fatura gelince fark edersiniz. Değerler normal
+# sürenin kabaca iki-üç katına ayarlı; buraya takılan bir job "yavaş" değil,
+# "kilitlenmiş" demektir.
 jobs:
   # Bu commit backend'e dokunuyor mu? Aşağıdaki ağır job'lar buna bakarak
   # kendini atlıyor. Sadece README ya da iOS tarafı (MenuLo/, MenuLo.xcodeproj)
@@ -32,6 +44,7 @@ jobs:
   # "atlandı" kararını verebilmesi için birinin bakması lazım.
   changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       backend: ${{ steps.filtre.outputs.backend }}
     steps:
@@ -54,6 +67,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: backend
@@ -85,6 +99,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: backend
@@ -109,6 +124,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: backend
@@ -131,6 +147,7 @@ jobs:
   # Zaten saniyeler sürüyor, tasarruf edilecek bir maliyeti de yok.
   secret-scan:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
         with:
@@ -155,6 +172,9 @@ jobs:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
+    # smoke_test.sh içindeki `--wait-timeout 180` tek başına yetmez: build
+    # aşamasında ya da compose'un kendisi asılırsa o zaman aşımına hiç gelinmez.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
 
@@ -174,6 +194,7 @@ jobs:
     # burası da kendiliğinden devre dışı kalıyor — ki doğrusu da bu, image
     # değişmediyse yeniden yayınlanmasının anlamı yok.
     needs: [ test, lint, audit, secret-scan, integration ]
+    timeout-minutes: 25
     permissions:
       contents: read
       security-events: write
@@ -203,15 +224,22 @@ jobs:
       #
       # Ayrıca menulo-db de kapsama girdi. Eskiden yalnızca backend taranıyordu,
       # oysa db image'ı da Docker Hub'a push ediliyor; taranmadan yayınlanıyordu.
+      #
+      # .trivycache PAYLAŞIMLI: `docker run --rm` her seferinde temiz bir cache
+      # ile başlar, yani bu mount olmadan zafiyet veritabanı (~55 MB) iki image
+      # için iki kez inerdi. Dizin runner'a özel; koşular arasında saklanmıyor
+      # (Trivy DB'si 6 saatte bir güncellendiği için isabet oranı düşük olurdu,
+      # actions/cache kurmaya değmez).
       - name: Trivy ile image zafiyet taraması
         run: |
           set -euo pipefail
-          mkdir -p trivy
+          mkdir -p trivy .trivycache
           for name in backend db; do
             echo "════════ menulo-$name taranıyor ════════"
             docker run --rm \
               -v /var/run/docker.sock:/var/run/docker.sock \
               -v "$PWD/trivy:/out" \
+              -v "$PWD/.trivycache:/root/.cache/trivy" \
               aquasec/trivy:latest image \
                 --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed \
                 --no-progress --exit-code 0 \

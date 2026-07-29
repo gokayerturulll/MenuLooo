@@ -52,7 +52,7 @@ jobs:
 
       # PR'da base branch'e karşı, push'ta bir önceki commit'e karşı karşılaştırır.
       # İki durumu da doğru ele aldığı için elle `git diff` yazmak yerine bu action.
-      - uses: dorny/paths-filter@v3
+      - uses: dorny/paths-filter@v4
         id: filtre
         with:
           filters: |

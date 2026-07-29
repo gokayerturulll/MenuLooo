@@ -261,18 +261,38 @@ jobs:
               convert --format sarif -o "/out/$name.sarif" "/out/$name.json"
           done
 
-      # Security sekmesine yükler. sarif_file bir KLASÖR alabiliyor; içindeki
-      # tüm .sarif dosyaları yüklenir, yani backend ve db ayrı ayrı raporlanır.
+      # HER IMAGE AYRI ADIM, AYRI `category` — birleştirmeyin.
       #
-      # Private repo + Advanced Security yoksa bu adım başarısız olabilir;
-      # taramanın kendisi log'da zaten görünür olduğu için continue-on-error ile
-      # CI'ı kırmasına izin verilmiyor.
-      - name: SARIF sonuçlarını Security sekmesine yükle
+      # Eskiden tek adımdı ve `sarif_file: trivy` ile KLASÖRÜ veriyordu; içindeki
+      # backend.sarif ve db.sarif birlikte yüklenecek sanılıyordu. GitHub 21
+      # Temmuz 2025'te bunu bıraktı: aynı category altında birden fazla SARIF
+      # "run"ı artık birleştirilmiyor, yükleme reddediliyor.
+      #   https://github.blog/changelog/2025-07-21-code-scanning-will-stop-combining-multiple-sarif-runs-uploaded-in-the-same-sarif-file/
+      #
+      # `category` yazılmazsa GitHub onu workflow+job adından türetiyordu
+      # (".github/workflows/backend-ci.yml:docker-build"), yani iki dosya da AYNI
+      # kategoriye düşüyordu. Artık her image kendi kategorisini alıyor ve ikisi
+      # Security sekmesinde ayrı ayrı, birbirinin üstüne yazmadan görünüyor.
+      #
+      # Bu bozukluk fark edilmedi çünkü continue-on-error hatayı yutuyor ve CI
+      # yeşil kalıyordu. continue-on-error yine de doğru tercih (Security sekmesi
+      # erişimi olmayan bir fork'ta CI kırılmamalı, tarama sonuçları log'da zaten
+      # görünüyor) — ama artık bu adımların kırmızı anotasyonuna bakmak lazım.
+      - name: SARIF — backend sonuçlarını Security sekmesine yükle
         if: always()
         continue-on-error: true
         uses: github/codeql-action/upload-sarif@v4
         with:
-          sarif_file: trivy
+          sarif_file: trivy/backend.sarif
+          category: trivy-backend
+
+      - name: SARIF — db sonuçlarını Security sekmesine yükle
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy/db.sarif
+          category: trivy-db
 
       # ── Push, build ve tarama ile AYNI job içinde ────────────────────────────
       # Eskiden push ayrı bir job'da sıfırdan yeniden build ediyordu. Bu, taranan

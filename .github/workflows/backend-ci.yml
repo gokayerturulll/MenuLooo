@@ -42,6 +42,11 @@ jobs:
   #
   # Bu job'ın kendisi saniyeler sürer ve HER ZAMAN koşar — çünkü diğerlerinin
   # "atlandı" kararını verebilmesi için birinin bakması lazım.
+  # NOT — her job'da `timeout-minutes` var. GitHub'ın varsayılanı 360 dakika:
+  # asılan bir job (cevap vermeyen bir pull, bitmeyen bir --wait) altı saat
+  # runner yakar ve bunu ancak fatura gelince fark edersin. Değerler normal
+  # sürenin kabaca iki-üç katına ayarlı; buraya takılan bir job "yavaş" değil,
+  # "kilitlenmiş" demektir.
   changes:
     runs-on: ubuntu-latest
     timeout-minutes: 5

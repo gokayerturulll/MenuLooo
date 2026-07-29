@@ -14,6 +14,10 @@ on:
   pull_request:
     branches: [ main ]
 
+# Gerekçe backend-ci.yml'da. Burada hiçbir job'ın yazma yetkisine ihtiyacı yok.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -26,6 +30,7 @@ jobs:
     # Bu job sadece dosya listesine bakıyor — macOS runner'a gerek yok,
     # ucuz Linux runner'da koşuyor.
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       ios: ${{ steps.filtre.outputs.ios }}
     steps:
@@ -46,6 +51,11 @@ jobs:
     needs: ios-changes
     if: needs.ios-changes.outputs.ios == 'true'
     runs-on: macos-15
+    # BURADA ÖZELLİKLE ÖNEMLİ: macOS runner dakikası Linux'un 10 KATI olarak
+    # faturalanıyor. GitHub'ın varsayılan 360 dakikalık limitine kadar asılan
+    # tek bir koşu 3600 dakika-eşdeğeri yazar — aylık ücretsiz kotanın (2000)
+    # tamamından fazlası. Simülatör açılışının asılması gerçek bir senaryo.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
 
@@ -53,7 +63,15 @@ jobs:
       # üretiliyor. Bu yüzden CI'ın ilk işi projeyi oluşturmak.
       # Yan fayda: project.yml ile üretilen proje arasında sürüklenme olursa
       # burada ortaya çıkar; senin makinendeki eski .xcodeproj testi kurtaramaz.
+      # HOMEBREW_NO_AUTO_UPDATE: `brew install` varsayılan olarak önce tüm formül
+      # deposunu günceller — xcodegen'in kendisi saniyeler sürerken bu adım
+      # dakikalar alıyor ve 10x faturalanan runner'da en pahalı boş bekleyiş.
+      # Kurulacak paketin sürümü bizim için kritik değil, runner imajındaki
+      # formül deposu yeterince güncel.
       - name: XcodeGen kur
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
         run: brew install xcodegen
 
       # SIRALAMA ÖNEMLİ — bu adım xcodegen'den ÖNCE olmak zorunda.
@@ -114,6 +132,10 @@ jobs:
       # pipefail + koşullu xcpretty: xcpretty çıktıyı okunur kılıyor ama runner
       # imajında bulunmayabilir; yoksa ham çıktıya düşüyoruz. pipefail olmadan
       # xcodebuild'in hata kodu xcpretty'nin başarısı tarafından yutulurdu.
+      #
+      # -resultBundlePath: hangi testin, hangi assertion'da, hangi satırda
+      # patladığı .xcresult paketinde duruyor. Onsuz elde yalnızca log kalıyor
+      # ve xcpretty log'u kısalttığı için asıl hata çoğu zaman görünmüyor.
       - name: Testleri çalıştır
         run: |
           set -o pipefail
@@ -122,7 +144,18 @@ jobs:
             -project MenuLo.xcodeproj \
             -scheme MenuLo \
             -destination "id=${{ steps.sim.outputs.udid }}" \
+            -resultBundlePath TestResults.xcresult \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             | $FORMATTER
+
+      # Yalnızca BAŞARISIZLIKTA yükle: geçen koşuda kimse açıp bakmıyor, .xcresult
+      # paketi ise onlarca MB tutabiliyor. Xcode ile açılır (`open TestResults.xcresult`).
+      - name: Test sonuç paketini sakla
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-test-results
+          path: TestResults.xcresult
+          retention-days: 7

@@ -179,7 +179,9 @@ Kapıların her biri farklı bir soruya cevap veriyor:
 
 Trivy raporlayıcı modda (`--exit-code 0`) çalışır: bulguların çoğu base image'dan gelir ve bu repodan düzeltilemez. Kalıcı kırmızı bir CI, taramanın görmezden gelinmesiyle sonuçlanır — uygulamanın kendi bağımlılıklarını zaten `audit` job'ı bloklayarak koruyor.
 
-Bağımlılıklar Dependabot ile haftalık güncellenir; **major** Docker base image güncellemeleri kasıtlı olarak kapalıdır, gerekçesi [`dependabot.yml`](.github/dependabot.yml) içinde ayrıntılı yazılıdır.
+Her job'da `timeout-minutes` tanımlıdır. GitHub'ın varsayılanı 360 dakikadır; asılan tek bir job altı saat runner yakar ve macOS runner'da bu 10 kat faturalanır.
+
+Bağımlılık güncellemeleri [`dependabot.yml`](.github/dependabot.yml) ile iki ekosistemle sınırlıdır: **github-actions** (haftalık) ve **npm** (aylık). Docker base image'ları kapsam dışıdır — gerekçesi dosyanın sonunda ayrıntılı yazılıdır, özeti: `node:20-alpine` sürümsüz bir etiket olduğu için Dependabot orada zaten hiçbir şey öneremiyor, postgres yükseltmesi ise `postgres_data` volume'ünü ilgilendirdiği için elle ve planlı yapılmak zorunda.
 
 ## İzleme
 

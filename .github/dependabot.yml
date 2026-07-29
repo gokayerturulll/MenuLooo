@@ -3,21 +3,35 @@
 # npm audit "şu an zafiyetli olanı" yakalar; Dependabot ise güncel kalmayı
 # sağlayarak zafiyet oluşmadan önce önler. İkisi birbirini tamamlar.
 #
-# Haftalık ritim seçildi: günlük PR yağmuru yaratmadan güncel kalmaya yeter.
+# ── Kapsam neden bu kadar dar? ────────────────────────────────────────────────
+# Açılan ilk 13 Dependabot PR'ının karnesi:
+#
+#   github-actions : 5 açıldı, 5 merge edildi   (#3 #4 #6 #7 #8)
+#   npm            : 5 açıldı, 3 merge edildi   (kapatılan ikisi de major)
+#   docker         : 3 açıldı, 0 merge edildi   (#2 #5 #15 — hepsi kapatıldı)
+#
+# docker ekosistemi bu yüzden tamamen kaldırıldı. Ayrıntılı gerekçe aşağıda.
 
 version: 2
 
 updates:
   # ── Backend Node.js bağımlılıkları ─────────────────────────────────────────
+  #
+  # AYLIK, haftalık değil. Acil güvenlik ihtiyacını Dependabot değil, her PR'da
+  # koşan `audit` job'ı karşılıyor (npm audit --omit=dev --audit-level=high
+  # high/critical bulguda hattı bloklar). Dependabot'un buradaki rolü zafiyete
+  # müdahale değil, sürüklenmeyi önlemek — bunun için aylık ritim yeterli.
+  # Haftalıkken tek kişilik projede PR'lar incelenmeden birikiyordu.
   - package-ecosystem: "npm"
     directory: "/backend"
     schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
+      interval: "monthly"
+    open-pull-requests-limit: 3
     groups:
       # Yama/minor güncellemeleri tek PR'da topla — inceleme yükünü azaltır.
-      # Major sürümler kırıcı olabileceği için ayrı ayrı PR açılır.
+      # Major sürümler kırıcı olabileceği için ayrı ayrı PR açılır: #11
+      # (express-rate-limit 7→8) ve #12 (express 4→5) tam da bu yüzden ayrı
+      # gelip ayrı ayrı reddedilebildi.
       minor-ve-patch:
         update-types:
           - "minor"
@@ -26,47 +40,18 @@ updates:
       - "dependencies"
       - "backend"
 
-  # ── Docker base image'ları (node:20-alpine, postgres vb.) ──────────────────
+  # ── GitHub Actions sürümleri (actions/checkout@v7 vb.) ─────────────────────
   #
-  # MAJOR sürüm atlamaları bilinçli olarak kapalı. Sebebi: bu image'ların major
-  # yükseltmesi tek satırlık bir değişiklik DEĞİL, koordineli bir iş gerektiriyor
-  # ve CI bunu yakalayamıyor (docker build image'ı yalnızca KURAR, çalıştırmaz).
+  # Kapsamdaki en değerli girdi ve alternatifi yok: GitHub, action'ların
+  # altındaki Node runtime'ını periyodik olarak emekliye ayırıyor (16 → 20 → 24).
+  # Eski bir action bir gün uyarı vermeye, sonra da çalışmaya son veriyor.
+  # Bunu sana söyleyen başka bir mekanizma yok — Dependabot olmasa CI sessizce
+  # çürür. Haftalık kalıyor; hem ucuz hem 5/5 isabetli.
   #
-  # Somut örnek — postgres 16 → 18 denemesi (PR #2) tüm kontrollerden GEÇTİ ama:
-  #   1. db/Dockerfile'da uzantı paketleri "postgresql-16-postgis-3" şeklinde
-  #      sabit yazılı; base image 18 olunca uzantılar 16 klasörüne kuruluyor,
-  #      18 klasörü boş kalıyor → migration'daki CREATE EXTENSION postgis/vector
-  #      başarısız olur, backend hiç açılmaz.
-  #   2. Mevcut postgres_data volume'ü 16 ile oluşturulduğu için 18 onu okuyamaz
-  #      ("database files are incompatible") → veri taşıma planı gerekir.
-  #
-  # Yama/minor güncellemeleri (16.6 → 16.7) açık kalır; onlar güvenli.
-  # Major yükseltme yapılacağı zaman elle ve planlı yapılmalı.
-  - package-ecosystem: "docker"
-    directory: "/backend"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    ignore:
-      - dependency-name: "node"
-        update-types: [ "version-update:semver-major" ]
-    labels:
-      - "dependencies"
-      - "docker"
-
-  - package-ecosystem: "docker"
-    directory: "/db"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    ignore:
-      - dependency-name: "postgres"
-        update-types: [ "version-update:semver-major" ]
-    labels:
-      - "dependencies"
-      - "docker"
-
-  # ── GitHub Actions sürümleri (actions/checkout@v4 vb.) ─────────────────────
+  # Maliyet notu: actions/checkout gibi HER İKİ workflow dosyasında da geçen bir
+  # action'ın bump'ı iki dosyayı birden değiştirir, dolayısıyla hem backend
+  # hattını hem de macOS runner'daki iOS hattını tetikler. Bu doğru davranış
+  # (workflow değişti, doğrulanması gerekir) ama bilinçli ödenen bir bedel.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -75,3 +60,23 @@ updates:
     labels:
       - "dependencies"
       - "ci"
+
+# ── KALDIRILAN: docker ekosistemi (/backend ve /db) ──────────────────────────
+#
+# Üç PR açtı, üçü de kapatıldı. Ama asıl sebep skor değil, yapısal:
+#
+# /backend → backend/Dockerfile'da `FROM node:20-alpine` yazıyor: SÜRÜM NUMARASI
+#   YOK, sadece major. Dependabot bu satır için ancak "20 → 26" önerebilir, o da
+#   PR #5'te reddedildikten sonra `ignore` listesine alınmıştı. Yani girdi,
+#   tanımı gereği artık hiçbir şey öneremeyecek durumdaydı — ölü konfigürasyon.
+#   (`node:20-alpine` etiketi upstream'de zaten sürekli yeniden build ediliyor;
+#   güvenlik yamaları image'a Dependabot'suz, kendiliğinden geliyor.)
+#
+# /db → `FROM postgres:16.6-bookworm`. Minor önerebiliyordu ve önerdi:
+#   PR #15 (16.6 → 16.14). O da kapatıldı. Postgres minor yükseltmesi
+#   postgres_data volume'ünü ilgilendirdiği için elle ve planlı yapılmak
+#   isteniyor — Dependabot'un otomatik PR'ı bu kararı hızlandırmıyor.
+#
+# Major yükseltmelerin neden elle yapılması gerektiği (postgres 16→18 vakası)
+# scripts/smoke_test.sh ve docker-compose.ci.yml başlıklarında anlatılıyor.
+# Base image'ı yükseltmek istediğinde oradan başla.

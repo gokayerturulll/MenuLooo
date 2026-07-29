@@ -11,11 +11,30 @@
 # (cadvisor/prometheus/grafana başlatılmaz — `up backend` yalnızca backend'in
 #  depends_on zincirini çeker; cadvisor'ın privileged + macOS'a özel socket
 #  mount'u zaten Linux runner'da çalışmaz.)
+#
+# ── image: satırları neden var? ───────────────────────────────────────────────
+# Base compose'da servisler yalnızca `build:` tanımlıyor, yani compose her
+# seferinde KENDİ image'ını build ediyordu. CI'da bu, smoke test'in doğruladığı
+# image ile Trivy'nin tarayıp Docker Hub'a push ettiği image'ın FARKLI iki build
+# olması demekti — `node:20-alpine` değişebilir bir etiket ve `npm ci` registry'den
+# çekiyor, iki build farklı içerik üretebilir.
+#
+# Aşağıdaki `image:` etiketleri, workflow'un önceden build ettiği image'ları
+# işaret ediyor. SKIP_BUILD=1 ile çağrıldığında compose bu image'ları olduğu gibi
+# kullanır; yani "ayağa kalktığı kanıtlanan image" ile "yayınlanan image" artık
+# aynı digest.
+#
+# Yerelde (SKIP_BUILD olmadan) davranış değişmiyor: `--build` bayrağı image'ı
+# yine build eder, sadece bu isimle etiketler.
 
 services:
 
+  db:
+    image: menulo-db:ci
+
   # CI'da .env yok; migrate DB değişkenlerini zaten base compose'dan alıyor.
   migrate:
+    image: menulo-backend:ci
     restart: "no"
 
   # Gemini API çağrısı yapılamaz (ve yapılmamalı — CI'da ücretli dış servis
@@ -27,9 +46,11 @@ services:
   # 001_initial_schema.sql'deki CREATE EXTENSION + HNSW index zaten migrate
   # adımında kanıtlıyor.
   seed-embeddings:
+    image: menulo-backend:ci
     command: [ "node", "-e", "console.log('CI: embedding seed adımı atlandı.')" ]
 
   backend:
+    image: menulo-backend:ci
     # CI'da yeniden başlatma kapalı: çöken container sessizce ayağa kalkıp
     # hatayı gizlemesin, testi kırsın.
     restart: "no"

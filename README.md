@@ -165,8 +165,7 @@ flowchart LR
     L["lint<br/>eslint --max-warnings=0"] --> D
     A["audit<br/>npm audit high+"] --> D
     S["secret-scan<br/>gitleaks, tüm geçmiş"] --> D
-    I["integration<br/>compose smoke test"] --> D
-    D["docker-build<br/>build → Trivy → push"] --> H["Docker Hub<br/>:latest + :sha-abc1234"]
+    D["docker-build<br/>build → smoke test → Trivy → push"] --> H["Docker Hub<br/>:latest + :sha-abc1234"]
 ```
 
 Kapıların her biri farklı bir soruya cevap veriyor:
@@ -174,8 +173,8 @@ Kapıların her biri farklı bir soruya cevap veriyor:
 - **test** — Jest, `collectCoverageFrom` ile tüm controller/middleware dosyalarını ölçüme zorlar (yoksa test edilmemiş dosyalar yüzdeye hiç girmez ve kapsam olduğundan yüksek görünür). Eşik cırcır dişlisi gibi çalışır: mevcut seviyenin hemen altındadır, testsiz kod eklenince CI kırılır.
 - **audit** — yalnızca üretim bağımlılıkları (`--omit=dev`) ve yalnızca high/critical bloklar; geliştirme araçlarının zafiyetleri üretim image'ına girmediği için PR'ı durdurmaz.
 - **secret-scan** — `fetch-depth: 0` ile tüm git geçmişi taranır; sırrın sonradan silinmiş olması sızmadığı anlamına gelmez.
-- **integration** — [`scripts/smoke_test.sh`](scripts/smoke_test.sh) zinciri gerçekten ayağa kaldırır ve doğrular: backend healthy oluyor mu, `/health` ve `/metrics` cevap veriyor mu, `postgis` + `vector` uzantıları DB'de kurulu mu, migration'ların tamamı uygulanmış mı. **Neden gerekli:** `docker build` image'ı yalnızca kurar, çalıştırmaz — postgres 16→18 denemesi tam olarak bu yüzden tüm kontrollerden geçip yine de çalışmayacak durumdaydı.
-- **docker-build** — image bir kez build edilir, Trivy ile taranır ve **aynı image** push edilir (`docker tag` katmanları değiştirmez, digest korunur). Taranan ile yayınlananın farklı build'ler olması riski böylece ortadan kalkar. `:latest` yanında `:sha-<commit>` etiketi yayınlanır; geri dönüş için sabit bir hedef gerekir.
+- **docker-build** — tek bir zincir: image bir kez build edilir, **o image** ile smoke test koşar, **o image** Trivy ile taranır ve **o image** push edilir. `docker tag` katmanları değiştirmediği için digest baştan sona korunur; "ayağa kalktığı kanıtlanan" ile "yayınlanan" farklı build'ler olamaz. `:latest` yanında `:sha-<commit>` etiketi yayınlanır; geri dönüş için sabit bir hedef gerekir.
+  - **smoke test** — [`scripts/smoke_test.sh`](scripts/smoke_test.sh) zinciri gerçekten ayağa kaldırır ve doğrular: backend healthy oluyor mu, `/health` ve `/metrics` cevap veriyor mu, `postgis` + `vector` uzantıları DB'de kurulu mu, migration'ların tamamı uygulanmış mı. **Neden gerekli:** `docker build` image'ı yalnızca kurar, çalıştırmaz — postgres 16→18 denemesi tam olarak bu yüzden tüm kontrollerden geçip yine de çalışmayacak durumdaydı.
 
 Trivy raporlayıcı modda (`--exit-code 0`) çalışır: bulguların çoğu base image'dan gelir ve bu repodan düzeltilemez. Kalıcı kırmızı bir CI, taramanın görmezden gelinmesiyle sonuçlanır — uygulamanın kendi bağımlılıklarını zaten `audit` job'ı bloklayarak koruyor.
 

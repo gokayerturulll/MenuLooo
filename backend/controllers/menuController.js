@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const logger = require('../config/logger');
 const path = require('path');
 const fs   = require('fs/promises');
 const crypto = require('crypto');
@@ -133,7 +134,7 @@ exports.getOwnerMenuItems = async (req, res) => {
             data: result.rows.map(shapeMenuItem)
         });
     } catch (error) {
-        console.error('getOwnerMenuItems Error:', error);
+        logger.error({ err: error }, 'getOwnerMenuItems Error:');
         res.status(500).json({ success: false, message: 'Menü ürünleri getirilirken sunucu hatası oluştu.' });
     }
 };
@@ -197,7 +198,7 @@ exports.createMenuItem = async (req, res) => {
             data: shapeMenuItem(row)
         });
     } catch (error) {
-        console.error('createMenuItem Error:', error);
+        logger.error({ err: error }, 'createMenuItem Error:');
         res.status(500).json({ success: false, message: 'Ürün eklenirken sunucu hatası oluştu.' });
     }
 };
@@ -254,7 +255,7 @@ exports.updateMenuItem = async (req, res) => {
             data: shapeMenuItem(row)
         });
     } catch (error) {
-        console.error('updateMenuItem Error:', error);
+        logger.error({ err: error }, 'updateMenuItem Error:');
         res.status(500).json({ success: false, message: 'Ürün güncellenirken sunucu hatası oluştu.' });
     }
 };
@@ -282,7 +283,7 @@ exports.deleteMenuItem = async (req, res) => {
             message: 'Silindi.'
         });
     } catch (error) {
-        console.error('deleteMenuItem Error:', error);
+        logger.error({ err: error }, 'deleteMenuItem Error:');
         res.status(500).json({ success: false, message: 'Ürün silinirken sunucu hatası oluştu.' });
     }
 };
@@ -363,7 +364,7 @@ exports.uploadMenuItemPhoto = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('[uploadMenuItemPhoto]', error.message);
+        logger.error({ err: error }, '[uploadMenuItemPhoto]');
         res.status(500).json({ success: false, message: 'Fotoğraf yüklenirken sunucu hatası oluştu.' });
     }
 };
@@ -389,7 +390,7 @@ exports.getGreenMenu = async (_req, res) => {
             data: result.rows
         });
     } catch (error) {
-        console.error('Green Menu Error:', error);
+        logger.error({ err: error }, 'Green Menu Error:');
         res.status(500).json({ success: false, message: 'Yeşil menü getirilirken sunucu hatası oluştu.' });
     }
 };

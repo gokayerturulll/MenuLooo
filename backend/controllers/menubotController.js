@@ -22,15 +22,16 @@
 // ============================================================================
 
 const pool = require('../config/db');
+const logger = require('../config/logger');
 const { menubotIntentTotal } = require('../config/metrics');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const Groq = require('groq-sdk');
 
 if (!process.env.GEMINI_API_KEY) {
-    console.warn('⚠️  GEMINI_API_KEY tanımlı değil — embedding stage başarısız olacak.');
+    logger.warn('GEMINI_API_KEY tanımlı değil — embedding stage başarısız olacak.');
 }
 if (!process.env.GROQ_API_KEY) {
-    console.warn('⚠️  GROQ_API_KEY tanımlı değil — intent ve generation stage başarısız olacak.');
+    logger.warn('GROQ_API_KEY tanımlı değil — intent ve generation stage başarısız olacak.');
 }
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
@@ -109,8 +110,8 @@ function classifyAIError(err) {
 function logAIError(stage, err) {
     const status = extractStatus(err) ?? 'no-status';
     const firstLine = String(err?.message || err || 'unknown').split('\n')[0].slice(0, 220);
-    const code = err?.code ? ` (${err.code})` : '';
-    console.error(`[MenuBot Error] ${stage} · ${status}${code} · ${firstLine}`);
+    const code = err?.code || null;
+    logger.error({ stage, status, code }, `[MenuBot Error] ${firstLine}`);
 }
 
 async function runAICall(stage, fn) {
@@ -223,7 +224,7 @@ async function classifyIntent(message) {
             else if (/"intent"\s*:\s*"chit-chat"/i.test(raw)) result.intent = 'chit-chat';
         }
 
-        console.log(`[Intent] "${message}" → ${result.intent}${result.district ? ` (${result.district})` : ''}`);
+        logger.info({ message, intent: result.intent, district: result.district }, '[Intent]');
         menubotIntentTotal.labels(result.intent).inc();
         return result;
 
@@ -312,7 +313,7 @@ async function searchAllRestaurants(vectorLiteral, districtFilter = null) {
         if (rows.length > 0) return diversifyByRestaurant(rows);
         // DB'de o semtten hiç sonuç yok — LLM'e boş context göndermek yerine
         // global arama yap; sistem prompt'u "o bölgede mekan yok" demesini sağlar.
-        console.log(`[MenuBot] "${districtFilter}" için sonuç yok, global aramaya düşülüyor.`);
+        logger.info({ districtFilter }, '[MenuBot] sonuç yok, global aramaya düşülüyor');
     }
 
     const { rows } = await pool.query(
@@ -379,7 +380,7 @@ async function logSearch(userId, queryText, isMiss) {
         );
     } catch (err) {
         // Analytics log hatası hiçbir zaman response'u bloke etmemeli
-        console.error('[MenuBot] Analytics log hatası:', err.message);
+        logger.error({ err }, '[MenuBot] Analytics log hatası');
     }
 }
 
@@ -492,7 +493,7 @@ exports.ask = async (req, res) => {
             });
         }
         const firstLine = String(err?.message || err).split('\n')[0].slice(0, 220);
-        console.error(`[MenuBot Error] endpoint · 500 · ${firstLine}`);
+        logger.error({ status: 500 }, `[MenuBot Error] endpoint · ${firstLine}`);
         return res.status(500).json({ success: false, message: ERROR_MESSAGES.unknown });
     }
 };

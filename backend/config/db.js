@@ -1,6 +1,7 @@
 const { Pool } = require('pg');
 const promClient = require('prom-client');
 const { register } = require('./metrics');
+const logger = require('./logger');
 require('dotenv').config();
 
 const pool = new Pool({
@@ -18,7 +19,7 @@ const pool = new Pool({
 });
 
 pool.on('error', (err) => {
-    console.error('[DB] Beklenmeyen bağlantı hatası:', err.message);
+    logger.error({ err }, '[DB] Beklenmeyen bağlantı hatası');
 });
 
 // ─── Prometheus: bağlantı havuzu metrikleri ──────────────────────────────────
@@ -45,10 +46,10 @@ new promClient.Gauge({
 const connectDB = async () => {
     try {
         const client = await pool.connect();
-        console.log(`✅ PostgreSQL Connected: ${process.env.DB_NAME}`);
+        logger.info({ database: process.env.DB_NAME }, 'PostgreSQL Connected');
         client.release();
     } catch (err) {
-        console.error('❌ PostgreSQL Connection Error:', err.message);
+        logger.fatal({ err }, 'PostgreSQL Connection Error');
         process.exit(1);
     }
 };

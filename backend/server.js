@@ -5,9 +5,11 @@ const cors    = require('cors');
 const helmet  = require('helmet');
 const jwt     = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
+const pinoHttp = require('pino-http');
 const { Server } = require('socket.io');
 require('dotenv').config();
 
+const logger = require('./config/logger');
 const { register, httpRequestDuration, httpRequestTotal } = require('./config/metrics');
 
 const authRoutes         = require('./routes/authRoutes');
@@ -39,7 +41,7 @@ const originAllowed = ALLOWED_ORIGINS.length > 0
 
 // [KRİTİK-2] Production'da ALLOWED_ORIGINS boşsa wildcard CORS yerine başlatmayı engelle
 if (process.env.NODE_ENV === 'production' && ALLOWED_ORIGINS.length === 0) {
-    console.error('[FATAL] Production ortamında ALLOWED_ORIGINS tanımlanmamış. Güvenlik riski nedeniyle sunucu başlatılmıyor.');
+    logger.fatal('Production ortamında ALLOWED_ORIGINS tanımlanmamış. Güvenlik riski nedeniyle sunucu başlatılmıyor.');
     process.exit(1);
 }
 
@@ -51,6 +53,22 @@ app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : 'loopback');
 
 // ─── Güvenlik başlıkları ───────────────────────────────────────────────────────
 app.use(helmet());
+
+// ─── İstek loglama — her HTTP isteğini yapılandırılmış (JSON) log olarak yazar ─
+// /health ve /metrics saniyede bir Docker healthcheck / Prometheus scrape'i ile
+// çağrılıyor — bunları loglamak sinyali gürültüye boğar, o yüzden hariç tutuluyor.
+// Header'lar da (Helmet'in ürettiği CSP/HSTS vb.) her satırı şişirdiği için
+// serializer ile çıkarılıyor.
+app.use(pinoHttp({
+    logger,
+    autoLogging: {
+        ignore: (req) => req.url === '/health' || req.url === '/metrics',
+    },
+    serializers: {
+        req: (req) => ({ method: req.method, url: req.url }),
+        res: (res) => ({ statusCode: res.statusCode }),
+    },
+}));
 
 // ─── CORS (REST) ──────────────────────────────────────────────────────────────
 app.use(cors({
@@ -124,7 +142,7 @@ app.use((req, res) => {
 // ─── Global hata yakalayıcı ───────────────────────────────────────────────────
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
-    console.error('[Unhandled Error]', err.message || err);
+    logger.error({ err, route: req.originalUrl }, 'Unhandled Error');
     res.status(500).json({ success: false, message: 'Beklenmeyen bir sunucu hatası oluştu.' });
 });
 
@@ -170,7 +188,7 @@ new (require('prom-client')).Gauge({
 // ─── JWT_SECRET güç kontrolü ────────────────────────────────────────────────
 const jwtSecret = process.env.JWT_SECRET || '';
 if (jwtSecret.length < 32) {
-    console.error('[FATAL] JWT_SECRET en az 32 karakter olmalıdır. Sunucu başlatılmıyor.');
+    logger.fatal('JWT_SECRET en az 32 karakter olmalıdır. Sunucu başlatılmıyor.');
     process.exit(1);
 }
 
@@ -184,7 +202,7 @@ io.use((socket, next) => {
 
     const secret = process.env.JWT_SECRET;
     if (!secret) {
-        console.error('[FATAL] JWT_SECRET eksik.');
+        logger.fatal('JWT_SECRET eksik.');
         return next(new Error('Sunucu yapılandırma hatası.'));
     }
 
@@ -225,7 +243,7 @@ function checkDeckExhausted(roomId, channel) {
         delete roomMatchedIds[roomId];
         clearRoomDeck(roomId);
         io.to(channel).emit('deck_exhausted');
-        console.log(`[Socket] deck_exhausted: room=${roomId}`);
+        logger.info({ roomId }, 'deck_exhausted');
     }
 }
 
@@ -254,7 +272,7 @@ function recheckVotesAfterMemberChange(roomId, channel) {
             matched.add(restaurantId);
             roomMatchedIds[roomId] = matched;
             delete votes[restaurantId];
-            console.log(`[Socket] match_found (üye düşmesi): room=${roomId} restaurant=${restaurantId}`);
+            logger.info({ roomId, restaurantId }, 'match_found (üye düşmesi)');
             return; // Tek seferde bir eşleşme yeterli
         }
     }
@@ -279,7 +297,7 @@ function scheduleRoomCleanup(roomId) {
     if (roomEmptyTimers[roomId]) clearTimeout(roomEmptyTimers[roomId]);
     roomEmptyTimers[roomId] = setTimeout(() => {
         clearRoomState(roomId);
-        console.log(`[Socket] TTL doldu, state temizlendi: room=${roomId}`);
+        logger.info({ roomId }, 'TTL doldu, state temizlendi');
     }, ROOM_TTL_MS);
 }
 
@@ -305,7 +323,7 @@ function removeUserVotes(roomId, userId) {
 
 io.on('connection', (socket) => {
     const userId = socket.user?.user_id;
-    console.log(`[Socket] Bağlandı: ${socket.id} (user_id: ${userId})`);
+    logger.info({ socketId: socket.id, userId }, 'Socket bağlandı');
 
     // Kullanıcı bir odaya katılmak istediğinde bu event gelir (REST create/join'in ardından)
     socket.on('join_room', async ({ room_id }) => {
@@ -316,11 +334,11 @@ io.on('connection', (socket) => {
             const isMember = await verifyRoomMember(room_id, userId);
             if (!isMember) {
                 socket.emit('join_room_rejected', { room_id, reason: 'Bu odanın üyesi değilsiniz.' });
-                console.warn(`[Socket] Yetkisiz join_room: user_id=${userId} room=${room_id}`);
+                logger.warn({ userId, roomId: room_id }, 'Yetkisiz join_room');
                 return;
             }
         } catch (err) {
-            console.error('[Socket] join_room DB hatası:', err.message);
+            logger.error({ err, userId, roomId: room_id }, 'join_room DB hatası');
             socket.emit('join_room_rejected', { room_id, reason: 'Üyelik doğrulanamadı.' });
             return;
         }
@@ -343,7 +361,7 @@ io.on('connection', (socket) => {
                     roomHosts[room_id] = { creatorId: rows[0].creator_id, cachedAt: Date.now() };
                 }
             } catch (err) {
-                console.error('[Socket] roomHosts cache hatası:', err.message);
+                logger.error({ err, roomId: room_id }, 'roomHosts cache hatası');
             }
         }
 
@@ -353,7 +371,7 @@ io.on('connection', (socket) => {
         if (!roomActiveUsers.has(room_id)) roomActiveUsers.set(room_id, new Set());
         if (roomActiveUsers.get(room_id).has(userId)) {
             socket.emit('join_room_rejected', { room_id, reason: 'Zaten başka bir cihazdan bu odaya bağlısınız.' });
-            console.warn(`[Socket] Çoklu socket reddi: user_id=${userId} room=${room_id}`);
+            logger.warn({ userId, roomId: room_id }, 'Çoklu socket reddi');
             return;
         }
         roomActiveUsers.get(room_id).add(userId);
@@ -380,7 +398,7 @@ io.on('connection', (socket) => {
             my_voted_ids:           myVotedIds,
         });
 
-        console.log(`[Socket] user_id=${userId} → ${channel}`);
+        logger.info({ userId, channel }, 'join_room tamamlandı');
     });
 
     // Kullanıcı odadan ayrılmak istediğinde (uygulama arka plana geçerse de tetiklenir)
@@ -403,7 +421,7 @@ io.on('connection', (socket) => {
             recheckVotesAfterMemberChange(room_id, channel);
         }
 
-        console.log(`[Socket] user_id=${userId} ← ${channel}`);
+        logger.info({ userId, channel }, 'leave_room tamamlandı');
     });
 
     // Kullanıcı lobideyken kendi kategori tercihlerini bildirir
@@ -421,7 +439,7 @@ io.on('connection', (socket) => {
 
         // Diğer üyelere hangi kullanıcının ne seçtiğini bildir (opsiyonel UI güncelleme)
         socket.to(`room_${room_id}`).emit('categories_updated', { user_id: userId, categories: sanitized });
-        console.log(`[Socket] submit_categories: user=${userId} room=${room_id} categories=${sanitized}`);
+        logger.info({ userId, roomId: room_id, categories: sanitized }, 'submit_categories');
     });
 
     // Oda kurucusu oylamayı başlatır — tüm üyelerin kategorilerini toplar, DB'den restoran çeker
@@ -455,14 +473,14 @@ io.on('connection', (socket) => {
                     roomHosts[room_id] = hostEntry;
                 }
             } catch (err) {
-                console.error('[Socket] roomHosts yenileme hatası:', err.message);
+                logger.error({ err, roomId: room_id }, 'roomHosts yenileme hatası');
                 return reply(false, 'Yetki doğrulaması yapılamadı.');
             }
         }
 
         // Host kontrolü: sadece oda kurucusu start_voting yapabilir
         if (!hostEntry || hostEntry.creatorId !== userId) {
-            console.warn(`[Socket] Yetkisiz start_voting: user=${userId} room=${room_id}`);
+            logger.warn({ userId, roomId: room_id }, 'Yetkisiz start_voting');
             return reply(false, 'Sadece oda kurucusu oylamayı başlatabilir.');
         }
 
@@ -470,7 +488,7 @@ io.on('connection', (socket) => {
             // Odadaki tüm üyelerin kategorilerini birleştir (tekrarları kaldır)
             const prefs = roomMemberPrefs[room_id] ?? {};
             const allCategories = [...new Set(Object.values(prefs).flat())];
-            console.log(`[Socket] start_voting: room=${room_id} categories=${allCategories}`);
+            logger.info({ roomId: room_id, categories: allCategories }, 'start_voting');
 
             // Kategorilere uygun restoranları DB'den çek
             const restaurants = await fetchRestaurantsByCategories(allCategories);
@@ -486,9 +504,9 @@ io.on('connection', (socket) => {
             reply(true);
             // Tüm odaya restoran listesiyle birlikte voting_started gönder
             io.to(channel).emit('voting_started', { restaurants });
-            console.log(`[Socket] voting_started: room=${room_id} count=${restaurants.length}`);
+            logger.info({ roomId: room_id, count: restaurants.length }, 'voting_started');
         } catch (err) {
-            console.error('[Socket] start_voting hatası:', err.message);
+            logger.error({ err, roomId: room_id }, 'start_voting hatası');
             reply(false, 'Oylama başlatılamadı. Lütfen tekrar deneyin.');
         }
     });
@@ -505,14 +523,14 @@ io.on('connection', (socket) => {
 
         // Yetkilendirme Kontrolü: Sadece odaya 'join_room' ile başarıyla katılanlar oy verebilir.
         if (socketRoomMap[socket.id] !== room_id) {
-            console.warn(`[Socket] Yetkisiz oy girişimi: user_id=${userId} room=${room_id}`);
+            logger.warn({ userId, roomId: room_id }, 'Yetkisiz oy girişimi');
             return reply(false, 'Bu odada oy kullanma yetkiniz yok.');
         }
 
         // DoS koruması: restaurant_id bu odanın geçerli destesinde bulunmalı
         const deck = getRoomDeck(room_id);
         if (deck.length === 0 || !deck.map(String).includes(String(restaurant_id))) {
-            console.warn(`[Socket] Geçersiz restaurant_id: ${restaurant_id} room=${room_id}`);
+            logger.warn({ restaurantId: restaurant_id, roomId: room_id }, 'Geçersiz restaurant_id');
             return reply(false, 'Geçersiz restoran kimliği veya deste hazır değil.');
         }
 
@@ -551,7 +569,7 @@ io.on('connection', (socket) => {
             if (!roomMatchedIds[room_id]) roomMatchedIds[room_id] = new Set();
             roomMatchedIds[room_id].add(restaurant_id);
             delete roomVotes[room_id][restaurant_id];
-            console.log(`[Socket] match_found: room=${room_id} restaurant=${restaurant_id}`);
+            logger.info({ roomId: room_id, restaurantId: restaurant_id }, 'match_found');
         } else {
             checkDeckExhausted(room_id, channel);
         }
@@ -578,32 +596,32 @@ io.on('connection', (socket) => {
             }
         }
 
-        console.log(`[Socket] Ayrıldı: ${socket.id} (${reason})`);
+        logger.info({ socketId: socket.id, reason }, 'Socket ayrıldı');
     });
 });
 
 // ─── Global hata yakalayıcılar ───────────────────────────────────────────────
 process.on('unhandledRejection', (reason, _promise) => {
-    console.error('[unhandledRejection]', reason);
+    logger.error({ err: reason }, 'unhandledRejection');
     // Prod'da burada Sentry/Datadog'a log atılabilir
 });
 
 process.on('uncaughtException', (err) => {
-    console.error('[uncaughtException]', err);
+    logger.fatal({ err }, 'uncaughtException');
     httpServer.close(() => process.exit(1));
 });
 
 // ─── Graceful shutdown (docker compose stop/down → SIGTERM) ──────────────────
 function gracefulShutdown(signal) {
-    console.log(`\n${signal} alındı, sunucu düzgünce kapatılıyor...`);
+    logger.info({ signal }, 'Sinyal alındı, sunucu düzgünce kapatılıyor');
     httpServer.close(async () => {
-        console.log('HTTP sunucu kapandı, devam eden istek kalmadı.');
+        logger.info('HTTP sunucu kapandı, devam eden istek kalmadı.');
         try {
             const pool = require('./config/db');
             await pool.end();
-            console.log('PostgreSQL bağlantı havuzu kapandı.');
+            logger.info('PostgreSQL bağlantı havuzu kapandı.');
         } catch (err) {
-            console.error('Kapatma sırasında hata:', err.message);
+            logger.error({ err }, 'Kapatma sırasında hata');
         }
         process.exit(0);
     });
@@ -617,5 +635,5 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 // ─── Sunucu Başlatma ─────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 httpServer.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
+    logger.info({ port: PORT }, 'Server running');
 });

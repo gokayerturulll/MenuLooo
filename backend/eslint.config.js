@@ -34,7 +34,8 @@ module.exports = [
                 caughtErrorsIgnorePattern: '^_',
             }],
 
-            // console.error/log backend'de kasıtlı olarak kullanılıyor.
+            // migrations/run.js ve scripts/seed_embeddings.js console.log ile CLI
+            // çıktısı basıyor (elle çalıştırılan tek seferlik script'ler) — kasıtlı.
             'no-console': 'off',
 
             // Bug'a dönüşen tipik hatalar

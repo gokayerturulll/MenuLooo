@@ -4,6 +4,7 @@
 //   POST /api/restaurants/:id/reviews   → authMiddleware
 
 const pool = require('../config/db');
+const logger = require('../config/logger');
 
 const CONTENT_MAX_LEN = 2000;
 
@@ -60,7 +61,7 @@ exports.getRestaurantReviews = async (req, res) => {
 
         res.status(200).json({ success: true, count: rows.length, data: rows });
     } catch (err) {
-        console.error('Error fetching reviews:', err.message);
+        logger.error({ err: err }, 'Error fetching reviews:');
         res.status(500).json({ success: false, message: 'Yorumlar getirilirken sunucu hatası oluştu.' });
     }
 };
@@ -90,7 +91,7 @@ exports.getUserReviews = async (req, res) => {
 
         res.status(200).json({ success: true, count: rows.length, data: rows });
     } catch (err) {
-        console.error('Error fetching user reviews:', err.message);
+        logger.error({ err: err }, 'Error fetching user reviews:');
         res.status(500).json({ success: false, message: 'Yorumlarınız getirilirken sunucu hatası oluştu.' });
     }
 };
@@ -159,7 +160,7 @@ exports.addReview = async (req, res) => {
 
         res.status(201).json({ success: true, data: rows[0] });
     } catch (err) {
-        console.error('Error creating review:', err.message);
+        logger.error({ err: err }, 'Error creating review:');
         res.status(500).json({ success: false, message: 'Yorum kaydedilirken sunucu hatası oluştu.' });
     }
 };
@@ -232,7 +233,7 @@ exports.addReply = async (req, res) => {
             throw err;
         }
     } catch (err) {
-        console.error('[addReply]', err.message);
+        logger.error({ err: err }, '[addReply]');
         res.status(500).json({ success: false, message: 'Yanıt kaydedilirken sunucu hatası oluştu.' });
     }
 };

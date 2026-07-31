@@ -9,6 +9,7 @@
 //   router.post('/foo', authMiddleware, ownerOnly, controller.handler);
 
 const jwt = require('jsonwebtoken');
+const logger = require('../config/logger');
 
 /** Bearer token zorunlu — geçerli kullanıcıyı req.user'a yerleştirir. */
 exports.authMiddleware = (req, res, next) => {
@@ -26,7 +27,7 @@ exports.authMiddleware = (req, res, next) => {
     try {
         const secret = process.env.JWT_SECRET;
         if (!secret) {
-            console.error('[FATAL] JWT_SECRET is not set — cannot verify token.');
+            logger.fatal('JWT_SECRET is not set — cannot verify token.');
             return res.status(500).json({ success: false, message: 'Sunucu yapılandırma hatası.' });
         }
         const decoded = jwt.verify(token, secret);

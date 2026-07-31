@@ -3,6 +3,7 @@
 //   Sadece kimliği doğrulanmış kullanıcılar erişebilir.
 
 const pool = require('../config/db');
+const logger = require('../config/logger');
 
 exports.getTopSearches = async (req, res) => {
     try {
@@ -23,7 +24,7 @@ exports.getTopSearches = async (req, res) => {
 
         res.status(200).json({ success: true, count: rows.length, data: rows });
     } catch (error) {
-        console.error('[getTopSearches]', error.message);
+        logger.error({ err: error }, '[getTopSearches]');
         res.status(500).json({ success: false, message: 'Arama istatistikleri alınamadı.' });
     }
 };

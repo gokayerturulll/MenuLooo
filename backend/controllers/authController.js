@@ -2,6 +2,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const pool = require('../config/db');
+const logger = require('../config/logger');
 
 // ─── Validation helpers ───────────────────────────────────────────────────────
 
@@ -67,7 +68,7 @@ exports.register = async (req, res) => {
             data: result.rows[0]
         });
     } catch (error) {
-        console.error('Register Error:', error);
+        logger.error({ err: error }, 'Register Error');
         res.status(500).json({ success: false, message: 'Kayıt olurken bir sunucu hatası oluştu.' });
     }
 };
@@ -103,7 +104,7 @@ exports.login = async (req, res) => {
         }
 
         if (!process.env.JWT_SECRET) {
-            console.error('[FATAL] JWT_SECRET is not set — refusing to sign token.');
+            logger.fatal('JWT_SECRET is not set — refusing to sign token.');
             return res.status(500).json({ success: false, message: 'Sunucu yapılandırma hatası.' });
         }
 
@@ -138,7 +139,7 @@ exports.login = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Login Error:', error);
+        logger.error({ err: error }, 'Login Error');
         res.status(500).json({ success: false, message: 'Giriş yaparken bir sunucu hatası oluştu.' });
     }
 };
@@ -146,7 +147,7 @@ exports.login = async (req, res) => {
 // ─── Forgot Password ──────────────────────────────────────────────────────
 // 1. Email ile kullanıcıyı bul (yoksa bile aynı cevabı dön → enum saldırısı önle).
 // 2. 32 byte random token üret; hash'ini DB'ye yaz, 1 saat geçerli.
-// 3. Ham token'ı email ile gönder (production: SendGrid/Mailgun; dev: console.log).
+// 3. Ham token'ı email ile gönder (production: SendGrid/Mailgun; dev: log'a yazılır).
 // 4. Response her zaman 200 OK + generic mesaj — kullanıcı varlığını ifşa etme.
 
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;          // 1 saat
@@ -187,19 +188,19 @@ exports.forgotPassword = async (req, res) => {
             [userId, tokenHash, expiresAt]
         );
 
-        // PLACEHOLDER: gerçek email entegrasyonu yapılana kadar console'a yazılıyor
+        // PLACEHOLDER: gerçek email entegrasyonu yapılana kadar log'a yazılıyor
         // Production'da: SendGrid / Mailgun / Amazon SES ile email at
         // Ham token sadece development'ta log'lanır; prod log'unda sızdırma yapma.
         if (process.env.NODE_ENV !== 'production') {
             const resetLink = `${process.env.APP_URL || 'menulo://'}reset-password?token=${rawToken}`;
-            console.log(`[forgotPassword] (dev only) Email: ${normalized} | Reset link: ${resetLink}`);
+            logger.info({ email: normalized, resetLink }, '[forgotPassword] (dev only)');
         } else {
-            console.log(`[forgotPassword] reset token issued for user_id=${userId}`);
+            logger.info({ userId }, '[forgotPassword] reset token issued');
         }
 
         return res.status(200).json(genericResponse);
     } catch (error) {
-        console.error('[forgotPassword]', error.message);
+        logger.error({ err: error }, '[forgotPassword]');
         res.status(500).json({ success: false, message: 'Sunucu hatası oluştu.' });
     }
 };
@@ -263,7 +264,7 @@ exports.resetPassword = async (req, res) => {
 
         return res.status(200).json({ success: true, message: 'Şifreniz başarıyla güncellendi.' });
     } catch (error) {
-        console.error('[resetPassword]', error.message);
+        logger.error({ err: error }, '[resetPassword]');
         res.status(500).json({ success: false, message: 'Şifre sıfırlanırken sunucu hatası oluştu.' });
     }
 };
@@ -311,7 +312,7 @@ exports.changePassword = async (req, res) => {
 
         return res.status(200).json({ success: true, message: 'Şifreniz başarıyla değiştirildi.' });
     } catch (error) {
-        console.error('[changePassword]', error.message);
+        logger.error({ err: error }, '[changePassword]');
         res.status(500).json({ success: false, message: 'Şifre değiştirilirken sunucu hatası oluştu.' });
     }
 };
@@ -384,7 +385,7 @@ exports.getUserStats = async (req, res) => {
 
         res.status(200).json({ success: true, data: stats });
     } catch (error) {
-        console.error('[getUserStats]', error.message);
+        logger.error({ err: error }, '[getUserStats]');
         res.status(500).json({ success: false, message: 'İstatistikler alınamadı.' });
     }
 };
@@ -411,7 +412,7 @@ exports.deleteAccount = async (req, res) => {
             message: 'Hesabınız ve tüm verileriniz kalıcı olarak silindi.'
         });
     } catch (error) {
-        console.error('[deleteAccount]', error.message);
+        logger.error({ err: error }, '[deleteAccount]');
         res.status(500).json({ success: false, message: 'Hesap silinirken sunucu hatası oluştu.' });
     }
 };

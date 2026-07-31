@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const logger = require('../config/logger');
 const crypto = require('crypto');
 
 // ─── Oda Başına Restoran Destesi Cache ────────────────────────────────────────
@@ -95,7 +96,7 @@ exports.createRoom = async (req, res) => {
             },
         });
     } catch (error) {
-        console.error('[createRoom]', error.message);
+        logger.error({ err: error }, '[createRoom]');
         res.status(500).json({ success: false, message: 'Oda oluşturulurken sunucu hatası oluştu.' });
     }
 };
@@ -171,7 +172,7 @@ exports.getRoomRestaurants = async (req, res) => {
 
         return res.status(200).json({ success: true, data: rows });
     } catch (error) {
-        console.error('[getRoomRestaurants]', error.message);
+        logger.error({ err: error }, '[getRoomRestaurants]');
         res.status(500).json({ success: false, message: 'Restoran listesi alınamadı.' });
     }
 };
@@ -238,7 +239,7 @@ exports.joinRoom = async (req, res) => {
             },
         });
     } catch (error) {
-        console.error('[joinRoom]', error.message);
+        logger.error({ err: error }, '[joinRoom]');
         res.status(500).json({ success: false, message: 'Odaya katılırken sunucu hatası oluştu.' });
     }
 };

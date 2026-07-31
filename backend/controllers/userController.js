@@ -3,6 +3,7 @@
 //   PUT /api/users/me  — username ve phone_number güncellemesine izin verir
 
 const pool = require('../config/db');
+const logger = require('../config/logger');
 
 const USERNAME_MAX = 50;
 const PHONE_REGEX  = /^\+?[\d\s\-(). ]{7,20}$/;
@@ -20,7 +21,7 @@ exports.getMe = async (req, res) => {
         }
         res.status(200).json({ success: true, data: rows[0] });
     } catch (error) {
-        console.error('[getMe]', error.message);
+        logger.error({ err: error }, '[getMe]');
         res.status(500).json({ success: false, message: 'Profil bilgileri alınamadı.' });
     }
 };
@@ -64,7 +65,7 @@ exports.updateMe = async (req, res) => {
         }
         res.status(200).json({ success: true, data: rows[0] });
     } catch (error) {
-        console.error('[updateMe]', error.message);
+        logger.error({ err: error }, '[updateMe]');
         res.status(500).json({ success: false, message: 'Profil güncellenirken sunucu hatası oluştu.' });
     }
 };

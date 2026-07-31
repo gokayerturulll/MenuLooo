@@ -1,4 +1,5 @@
 const pool   = require('../config/db');
+const logger = require('../config/logger');
 const path   = require('path');
 const fs     = require('fs/promises');
 const crypto = require('crypto');
@@ -162,7 +163,7 @@ exports.getAllRestaurants = async (req, res) => {
             data: result.rows
         });
     } catch (err) {
-        console.error('Error fetching restaurants:', err.message);
+        logger.error({ err: err }, 'Error fetching restaurants:');
         res.status(500).json({
             success: false,
             message: 'Restoranlar getirilirken sunucu hatası oluştu.'
@@ -220,7 +221,7 @@ exports.getRestaurantById = async (req, res) => {
             data: result.rows[0]
         });
     } catch (error) {
-        console.error('getRestaurantById Error:', error);
+        logger.error({ err: error }, 'getRestaurantById Error:');
         res.status(500).json({ success: false, message: 'Restoran detayları getirilemedi.' });
     }
 };
@@ -326,7 +327,7 @@ exports.updateRestaurant = async (req, res) => {
             data: updated.rows[0]
         });
     } catch (error) {
-        console.error('updateRestaurant Error:', error);
+        logger.error({ err: error }, 'updateRestaurant Error:');
         res.status(500).json({ success: false, message: 'Restoran güncellenirken sunucu hatası oluştu.' });
     }
 };
@@ -370,7 +371,7 @@ exports.getRestaurantStats = async (req, res) => {
 
         res.status(200).json({ success: true, data: result.rows[0] });
     } catch (error) {
-        console.error('getRestaurantStats Error:', error);
+        logger.error({ err: error }, 'getRestaurantStats Error:');
         res.status(500).json({ success: false, message: 'İstatistikler alınamadı.' });
     }
 };
@@ -442,7 +443,7 @@ exports.uploadRestaurantImage = async (req, res) => {
             },
         });
     } catch (error) {
-        console.error('[uploadRestaurantImage]', error.message);
+        logger.error({ err: error }, '[uploadRestaurantImage]');
         res.status(500).json({ success: false, message: 'Görsel yüklenirken sunucu hatası oluştu.' });
     }
 };
@@ -493,7 +494,7 @@ exports.getRestaurantMenu = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Get Menu Error:', error);
+        logger.error({ err: error }, 'Get Menu Error:');
         res.status(500).json({ success: false, message: 'Menü getirilirken sunucu hatası oluştu.' });
     }
 };
